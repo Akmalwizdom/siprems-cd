@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, Tag, AlertCircle } from 'lucide-react';
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  date: string;
-  type: 'promotion' | 'holiday' | 'store-closed';
-  description?: string;
-}
+import { useStore, type CalendarEvent } from '../context/StoreContext';
 
 type ViewMode = 'month' | 'week' | 'day';
 
