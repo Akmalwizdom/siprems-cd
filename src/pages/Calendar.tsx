@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, Tag, AlertCircle } from 'lucide-react';
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  date: string;
-  type: 'promotion' | 'holiday' | 'store-closed';
-  description?: string;
-}
+import { useStore, type CalendarEvent } from '../context/StoreContext';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -18,33 +11,11 @@ const eventTypeConfig = {
 };
 
 export function Calendar() {
+  const { events, addEvent, removeEvent } = useStore();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [showModal, setShowModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [events, setEvents] = useState<CalendarEvent[]>([
-    {
-      id: '1',
-      title: 'Black Friday Sale',
-      date: '2024-11-29',
-      type: 'promotion',
-      description: '50% off on all electronics',
-    },
-    {
-      id: '2',
-      title: 'Christmas',
-      date: '2024-12-25',
-      type: 'holiday',
-      description: 'Christmas Day',
-    },
-    {
-      id: '3',
-      title: 'Store Renovation',
-      date: '2024-12-15',
-      type: 'store-closed',
-      description: 'Closed for renovation works',
-    },
-  ]);
   const [formData, setFormData] = useState({
     title: '',
     type: 'promotion' as CalendarEvent['type'],
@@ -115,12 +86,12 @@ export function Calendar() {
       description: formData.description,
     };
 
-    setEvents([...events, newEvent]);
+    addEvent(newEvent);
     closeModal();
   };
 
   const handleDeleteEvent = (id: string) => {
-    setEvents(events.filter(e => e.id !== id));
+    removeEvent(id);
   };
 
   const closeModal = () => {
