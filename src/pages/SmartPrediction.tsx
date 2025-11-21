@@ -87,6 +87,26 @@ export function SmartPrediction() {
     }[urgency] || 'text-slate-600 bg-slate-50 border-slate-200';
   };
 
+  // Error State
+  if (state === 'error') {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <div className="inline-flex w-24 h-24 bg-gradient-to-br from-red-600 to-orange-600 rounded-3xl items-center justify-center mb-6">
+          <AlertTriangle className="w-12 h-12 text-white" />
+        </div>
+        <h1 className="text-slate-900 mb-4">Prediction Error</h1>
+        <p className="text-red-600 mb-8 max-w-lg mx-auto">{error}</p>
+        <button
+          onClick={() => setState('idle')}
+          className="inline-flex items-center gap-3 bg-indigo-600 text-white px-8 py-4 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg hover:shadow-xl"
+        >
+          <Sparkles className="w-5 h-5" />
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
   // Idle State
   if (state === 'idle') {
     return (
