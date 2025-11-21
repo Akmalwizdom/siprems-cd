@@ -1,27 +1,68 @@
 import { useState } from 'react';
 import { Sparkles, Loader2, TrendingUp, AlertTriangle, MessageSquare, Send, ChevronRight, Calendar } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { predictionData, restockRecommendations } from '../utils/mockData';
+import { useStore } from '../context/StoreContext';
+import { apiService, type PredictionResponse } from '../services/api';
+import { PredictionData, RestockRecommendation } from '../types';
 
-type PredictionState = 'idle' | 'loading' | 'result' | 'learning';
+type PredictionState = 'idle' | 'loading' | 'result' | 'learning' | 'error';
 
 export function SmartPrediction() {
+  const { events } = useStore();
   const [state, setState] = useState<PredictionState>('idle');
   const [showChatbot, setShowChatbot] = useState(false);
+  const [predictionData, setPredictionData] = useState<PredictionData[]>([]);
+  const [restockRecommendations, setRestockRecommendations] = useState<RestockRecommendation[]>([]);
+  const [error, setError] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([
     {
       role: 'assistant',
-      content: 'Sales spike predicted during Eid Al-Fitr (Week 6-7) and New Year (Week 11). Historical data shows 120% increase during these periods. Consider restocking high-demand items early.',
+      content: 'I\'m your AI assistant. Click "Start Prediction" to generate stock forecasts based on your calendar events and sales history.',
     },
   ]);
   const [chatInput, setChatInput] = useState('');
 
-  const handleStartPrediction = () => {
+  const handleStartPrediction = async () => {
     setState('loading');
-    // Simulate AI processing
-    setTimeout(() => {
-      setState('result');
-    }, 3000);
+    setError('');
+
+    try {
+      // Convert StoreContext events to API format
+      const apiEvents = events.map(event => ({
+        date: event.date,
+        type: event.type,
+        title: event.title,
+      }));
+
+      // Call the API
+      const response = await apiService.getPrediction('store_1', apiEvents);
+
+      if (response.status === 'success') {
+        setPredictionData(response.chartData);
+        setRestockRecommendations(response.recommendations);
+
+        // Update chatbot with insights
+        const firstHoliday = response.chartData.find(d => d.isHoliday);
+        const initialMessage = firstHoliday
+          ? `Sales spike predicted around ${firstHoliday.date}. Historical data shows significant increase during ${firstHoliday.holidayName}. Consider restocking high-demand items early.`
+          : 'Prediction complete. Review the forecast and recommendations below.';
+
+        setChatMessages([{
+          role: 'assistant',
+          content: initialMessage,
+        }]);
+
+        setState('result');
+      } else {
+        setError('Prediction failed. Please try again.');
+        setState('error');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch prediction from server';
+      setError(errorMessage);
+      setState('error');
+      console.error('Prediction error:', err);
+    }
   };
 
   const handleSendMessage = () => {
@@ -45,6 +86,26 @@ export function SmartPrediction() {
       low: 'text-green-600 bg-green-50 border-green-200',
     }[urgency] || 'text-slate-600 bg-slate-50 border-slate-200';
   };
+
+  // Error State
+  if (state === 'error') {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <div className="inline-flex w-24 h-24 bg-gradient-to-br from-red-600 to-orange-600 rounded-3xl items-center justify-center mb-6">
+          <AlertTriangle className="w-12 h-12 text-white" />
+        </div>
+        <h1 className="text-slate-900 mb-4">Prediction Error</h1>
+        <p className="text-red-600 mb-8 max-w-lg mx-auto">{error}</p>
+        <button
+          onClick={() => setState('idle')}
+          className="inline-flex items-center gap-3 bg-indigo-600 text-white px-8 py-4 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg hover:shadow-xl"
+        >
+          <Sparkles className="w-5 h-5" />
+          Try Again
+        </button>
+      </div>
+    );
+  }
 
   // Idle State
   if (state === 'idle') {
@@ -200,7 +261,7 @@ export function SmartPrediction() {
                   name="AI Prediction"
                   dot={{ fill: '#4f46e5', r: 4 }}
                 />
-                {predictionData
+                {predictionData && predictionData
                   .filter((d) => d.isHoliday)
                   .map((holiday, idx) => (
                     <ReferenceLine
@@ -209,7 +270,7 @@ export function SmartPrediction() {
                       stroke="#ef4444"
                       strokeDasharray="3 3"
                       label={{
-                        value: holiday.holidayName,
+                        value: holiday.holidayName || 'Event',
                         position: 'top',
                         fill: '#ef4444',
                         fontSize: 12,
