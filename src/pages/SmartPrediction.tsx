@@ -261,7 +261,7 @@ export function SmartPrediction() {
                   name="AI Prediction"
                   dot={{ fill: '#4f46e5', r: 4 }}
                 />
-                {predictionData
+                {predictionData && predictionData
                   .filter((d) => d.isHoliday)
                   .map((holiday, idx) => (
                     <ReferenceLine
@@ -270,7 +270,7 @@ export function SmartPrediction() {
                       stroke="#ef4444"
                       strokeDasharray="3 3"
                       label={{
-                        value: holiday.holidayName,
+                        value: holiday.holidayName || 'Event',
                         position: 'top',
                         fill: '#ef4444',
                         fontSize: 12,
