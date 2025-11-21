@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Database PostgreSQL
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: siprems_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  # Backend API (Python Prophet)
+  backend:
+    build: ./backend
+    volumes:
+      - ./backend:/app
+      - model_data:/app/models # Persist model files
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/siprems_db
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  # Frontend (React)
+  frontend:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src # Hot reload dev
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  model_data:
