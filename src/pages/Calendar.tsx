@@ -86,12 +86,12 @@ export function Calendar() {
       description: formData.description,
     };
 
-    setEvents([...events, newEvent]);
+    addEvent(newEvent);
     closeModal();
   };
 
   const handleDeleteEvent = (id: string) => {
-    setEvents(events.filter(e => e.id !== id));
+    removeEvent(id);
   };
 
   const closeModal = () => {
