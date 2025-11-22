@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { TrendingUp, ShoppingBag, Package, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { TrendingUp, ShoppingBag, Package, AlertCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { getDashboardMetrics, getSalesData, categorySales, criticalStockItems } from '../utils/mockData';
-import { TimeRange } from '../types';
+import { TimeRange, DashboardMetrics } from '../types';
+
+const API_BASE_URL = 'http://localhost:8000/api';
 
 const timeRanges: { value: TimeRange; label: string }[] = [
   { value: 'today', label: 'Today' },
@@ -11,10 +12,55 @@ const timeRanges: { value: TimeRange; label: string }[] = [
   { value: 'year', label: 'This Year' },
 ];
 
+const categorySales = [
+  { category: 'Electronics', value: 2487, color: '#3b82f6' },
+  { category: 'Home & Kitchen', value: 1823, color: '#ef4444' },
+  { category: 'Stationery', value: 1463, color: '#f59e0b' },
+  { category: 'Sports', value: 987, color: '#10b981' },
+  { category: 'Fashion', value: 1245, color: '#8b5cf6' },
+];
+
 export function Dashboard() {
   const [selectedRange, setSelectedRange] = useState<TimeRange>('month');
-  const metrics = getDashboardMetrics(selectedRange);
-  const salesData = getSalesData(selectedRange);
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [salesData, setSalesData] = useState<any[]>([]);
+  const [criticalStockItems, setCriticalStockItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [selectedRange]);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      const [metricsRes, salesRes, productsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/dashboard/metrics`),
+        fetch(`${API_BASE_URL}/dashboard/sales-chart`),
+        fetch(`${API_BASE_URL}/products`)
+      ]);
+
+      const metricsData = await metricsRes.json();
+      const salesDataRaw = await salesRes.json();
+      const productsData = await productsRes.json();
+
+      setMetrics(metricsData);
+      setSalesData(salesDataRaw);
+      setCriticalStockItems(productsData.filter((p: any) => p.stock < 5));
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading || !metrics) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -47,8 +93,8 @@ export function Dashboard() {
             <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
               <TrendingUp className="w-6 h-6 text-white" />
             </div>
-            <span className="text-green-600 bg-green-50 px-3 py-1 rounded-full">
-              +{metrics.revenueChange}%
+            <span className={`${metrics.revenueChange >= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'} px-3 py-1 rounded-full`}>
+              {metrics.revenueChange >= 0 ? '+' : ''}{metrics.revenueChange}%
             </span>
           </div>
           <h3 className="text-slate-500 mb-1">Total Revenue</h3>
@@ -61,8 +107,8 @@ export function Dashboard() {
             <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
               <ShoppingBag className="w-6 h-6 text-white" />
             </div>
-            <span className="text-green-600 bg-green-50 px-3 py-1 rounded-full">
-              +{metrics.transactionsChange}%
+            <span className={`${metrics.transactionsChange >= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'} px-3 py-1 rounded-full`}>
+              {metrics.transactionsChange >= 0 ? '+' : ''}{metrics.transactionsChange}%
             </span>
           </div>
           <h3 className="text-slate-500 mb-1">Total Transactions</h3>
@@ -75,8 +121,8 @@ export function Dashboard() {
             <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg">
               <Package className="w-6 h-6 text-white" />
             </div>
-            <span className="text-green-600 bg-green-50 px-3 py-1 rounded-full">
-              +{metrics.itemsChange}%
+            <span className={`${metrics.itemsChange >= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'} px-3 py-1 rounded-full`}>
+              {metrics.itemsChange >= 0 ? '+' : ''}{metrics.itemsChange}%
             </span>
           </div>
           <h3 className="text-slate-500 mb-1">Items Sold</h3>

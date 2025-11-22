@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+
+const API_BASE_URL = 'http://localhost:8000/api';
 
 export interface CalendarEvent {
   id: string;
@@ -14,34 +16,38 @@ interface StoreContextType {
   removeEvent: (id: string) => void;
   updateEvent: (id: string, event: Partial<CalendarEvent>) => void;
   clearEvents: () => void;
+  loading: boolean;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [events, setEvents] = useState<CalendarEvent[]>([
-    {
-      id: '1',
-      title: 'Black Friday Sale',
-      date: '2024-11-29',
-      type: 'promotion',
-      description: '50% off on all electronics',
-    },
-    {
-      id: '2',
-      title: 'Christmas',
-      date: '2024-12-25',
-      type: 'holiday',
-      description: 'Christmas Day',
-    },
-    {
-      id: '3',
-      title: 'Store Renovation',
-      date: '2024-12-15',
-      type: 'store-closed',
-      description: 'Closed for renovation works',
-    },
-  ]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  const fetchEvents = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/calendar/events`);
+      const data = await response.json();
+      const formattedEvents = data.map((e: any, index: number) => ({
+        id: `${index + 1}`,
+        title: e.title,
+        date: e.date,
+        type: e.type as 'promotion' | 'holiday' | 'store-closed',
+        description: e.description || ''
+      }));
+      setEvents(formattedEvents);
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const addEvent = (event: CalendarEvent) => {
     setEvents([...events, event]);
@@ -64,7 +70,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <StoreContext.Provider value={{ events, addEvent, removeEvent, updateEvent, clearEvents }}>
+    <StoreContext.Provider value={{ events, addEvent, removeEvent, updateEvent, clearEvents, loading }}>
       {children}
     </StoreContext.Provider>
   );

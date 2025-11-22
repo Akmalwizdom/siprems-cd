@@ -1,16 +1,43 @@
-import { useState } from 'react';
-import { Search, Plus, Minus, Trash2, ShoppingCart } from 'lucide-react';
-import { mockProducts } from '../utils/mockData';
+import { useState, useEffect } from 'react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, Loader2 } from 'lucide-react';
 import { Product, CartItem } from '../types';
 
+const API_BASE_URL = 'http://localhost:8000/api';
 const categories = ['All', 'Electronics', 'Home & Kitchen', 'Stationery', 'Sports', 'Fashion'];
 
 export function Transaction() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  const filteredProducts = mockProducts.filter((product) => {
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/products`);
+      const data = await response.json();
+      setProducts(data.map((p: any) => ({
+        id: p.id.toString(),
+        name: p.name,
+        category: p.category,
+        costPrice: parseFloat(p.cost_price),
+        sellingPrice: parseFloat(p.selling_price),
+        stock: p.stock,
+        description: p.description || ''
+      })));
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredProducts = products.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -60,6 +87,14 @@ export function Transaction() {
     setCart([]);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Product Catalog */}
@@ -101,7 +136,12 @@ export function Transaction() {
 
         {/* Product Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {filteredProducts.map((product) => (
+          {filteredProducts.length === 0 ? (
+            <div className="col-span-full text-center py-8 text-slate-500">
+              No products found
+            </div>
+          ) : (
+            filteredProducts.map((product) => (
             <button
               key={product.id}
               onClick={() => addToCart(product)}
@@ -117,7 +157,8 @@ export function Transaction() {
                 <span className="text-xs text-slate-500">Stock: {product.stock}</span>
               </div>
             </button>
-          ))}
+          ))
+          )}
         </div>
       </div>
 

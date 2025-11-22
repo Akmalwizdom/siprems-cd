@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, Tag, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, Tag, AlertCircle, Loader2 } from 'lucide-react';
 import { useStore, type CalendarEvent } from '../context/StoreContext';
+
+const API_BASE_URL = 'http://localhost:8000/api';
 
 type ViewMode = 'month' | 'week' | 'day';
 

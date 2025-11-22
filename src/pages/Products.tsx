@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, Search, Upload, X } from 'lucide-react';
-import { mockProducts } from '../utils/mockData';
+import { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Search, Upload, X, Loader2 } from 'lucide-react';
 import { Product } from '../types';
 
+const API_BASE_URL = 'http://localhost:8000/api';
+
 export function Products() {
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -17,6 +19,31 @@ export function Products() {
     stock: 0,
     description: '',
   });
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/products`);
+      const data = await response.json();
+      setProducts(data.map((p: any) => ({
+        id: p.id.toString(),
+        name: p.name,
+        category: p.category,
+        costPrice: parseFloat(p.cost_price),
+        sellingPrice: parseFloat(p.selling_price),
+        stock: p.stock,
+        description: p.description || ''
+      })));
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredProducts = products.filter((product) =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -102,6 +129,14 @@ export function Products() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -145,7 +180,14 @@ export function Products() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                    No products found
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map((product) => (
                 <tr key={product.id} className="border-b border-slate-200 hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div>
@@ -184,7 +226,8 @@ export function Products() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
         </div>
