@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Plus, Minus, Trash2, ShoppingCart, Loader2, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { Product, CartItem } from '../types';
 
@@ -27,6 +27,7 @@ export function Transaction() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [categories, setCategories] = useState<string[]>(['All']);
   const [cart, setCart] = useState<CartItem[]>([]);
   
   // Transaction History state
@@ -38,6 +39,7 @@ export function Transaction() {
   const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
+    fetchCategories();
     fetchProducts();
   }, []);
 
@@ -47,10 +49,20 @@ export function Transaction() {
     }
   }, [activeTab, page]);
 
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/products/categories`);
+      const data = await response.json();
+      setCategories(['All', ...data.categories]);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/products`);
+      const response = await fetch(`${API_BASE_URL}/products?limit=100`);
       const data = await response.json();
       const productData = data.data || data;
       setProducts(productData.map((p: any) => ({
@@ -93,8 +105,6 @@ export function Transaction() {
       minute: '2-digit'
     });
   };
-
-  const categoryFilters = useMemo(() => ['All', ...Array.from(new Set(products.map((p) => p.category)))], [products]);
 
   const filteredProducts = products.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -190,6 +200,7 @@ export function Transaction() {
           setSearchTerm={setSearchTerm}
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
+          categories={categories}
           cart={cart}
           addToCart={addToCart}
           updateQuantity={updateQuantity}
@@ -223,6 +234,7 @@ function POSView({
   setSearchTerm,
   selectedCategory,
   setSelectedCategory,
+  categories,
   cart,
   addToCart,
   updateQuantity,
@@ -232,8 +244,6 @@ function POSView({
   total,
   handleCheckout
 }: any) {
-  const categoryFilters = useMemo(() => ['All', ...Array.from(new Set(products.map((p: Product) => p.category)))], [products]);
-
   const filteredProducts = products.filter((product: Product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
@@ -270,7 +280,7 @@ function POSView({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {categoryFilters.map((category) => (
+            {categories.map((category) => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}

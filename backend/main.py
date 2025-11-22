@@ -274,11 +274,19 @@ def get_category_sales():
         })
     return results
 
+@app.get("/api/products/categories")
+def get_product_categories():
+    query = "SELECT DISTINCT category FROM products ORDER BY category"
+    with engine.connect() as conn:
+        result = conn.execute(text(query)).scalars().all()
+    return {"categories": list(result)}
+
 @app.get("/api/products")
 def get_products(
     page: int = 1, 
     limit: int = 10, 
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    category: Optional[str] = None
 ):
     offset = (page - 1) * limit
     
@@ -299,12 +307,20 @@ def get_products(
         ) recent ON recent.product_id = p.id
     """
     
-    where_clause = ""
+    where_clauses = []
     params = {"limit": limit, "offset": offset}
     
     if search:
-        where_clause = "WHERE p.name ILIKE :search OR p.category ILIKE :search OR p.sku ILIKE :search"
+        where_clauses.append("(p.name ILIKE :search OR p.category ILIKE :search OR p.sku ILIKE :search)")
         params["search"] = f"%{search}%"
+    
+    if category and category != "All":
+        where_clauses.append("p.category = :category")
+        params["category"] = category
+    
+    where_clause = ""
+    if where_clauses:
+        where_clause = "WHERE " + " AND ".join(where_clauses)
         
     count_query = f"SELECT COUNT(*) {base_query} {where_clause}"
     
