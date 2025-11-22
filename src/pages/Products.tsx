@@ -9,6 +9,8 @@ export function Products() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [categories, setCategories] = useState<string[]>(['All']);
+  const [selectedCategory, setSelectedCategory] = useState('All');
   
   // Pagination State
   const [page, setPage] = useState(1);
@@ -38,8 +40,22 @@ export function Products() {
   }, [searchTerm]);
 
   useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
     fetchProducts();
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, selectedCategory]);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/products/categories`);
+      const data = await response.json();
+      setCategories(['All', ...data.categories]);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -47,13 +63,14 @@ export function Products() {
       const query = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
-        ...(debouncedSearch && { search: debouncedSearch })
+        ...(debouncedSearch && { search: debouncedSearch }),
+        ...(selectedCategory && { category: selectedCategory })
       });
       
       const response = await fetch(`${API_BASE_URL}/products?${query}`);
       const data = await response.json();
       
-      setProducts(data.data.map((p: any) => ({
+      const products = data.data.map((p: any) => ({
         id: p.id.toString(),
         name: p.name,
         category: p.category,
@@ -61,8 +78,9 @@ export function Products() {
         sellingPrice: parseFloat(p.selling_price),
         stock: p.stock,
         description: p.description || ''
-      })));
+      }));
       
+      setProducts(products);
       setTotalPages(data.total_pages);
       setTotalItems(data.total);
     } catch (error) {
@@ -178,7 +196,7 @@ export function Products() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200">
-        <div className="p-6 border-b border-slate-200">
+        <div className="p-6 border-b border-slate-200 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
@@ -188,6 +206,24 @@ export function Products() {
               placeholder="Search products..."
               className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => {
+                  setSelectedCategory(category);
+                  setPage(1);
+                }}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  selectedCategory === category
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -255,6 +291,34 @@ export function Products() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+            <span className="text-sm text-slate-500">
+              Showing {filteredProducts.length > 0 ? (page - 1) * limit + 1 : 0} to {Math.min(page * limit, totalItems)} of {totalItems} products
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1 || loading}
+                className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4 text-slate-600" />
+              </button>
+              <span className="text-sm text-slate-600">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages || loading}
+                className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4 text-slate-600" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add/Edit Product Modal */}
