@@ -1,48 +1,46 @@
 -- init.sql
 
--- Tabel untuk menyimpan informasi Toko (pengganti store.csv)
-CREATE TABLE stores (
-    store_id INTEGER PRIMARY KEY,
-    store_type VARCHAR(10),
-    assortment VARCHAR(10),
-    competition_distance FLOAT,
-    competition_open_since_month INTEGER,
-    competition_open_since_year INTEGER,
-    promo2 INTEGER,
-    promo2_since_week INTEGER,
-    promo2_since_year INTEGER,
-    promo_interval VARCHAR(50)
-);
-
--- Tabel untuk data penjualan historis (pengganti train.csv)
-CREATE TABLE sales (
+-- 1. Tabel Produk (Master Data)
+CREATE TABLE products (
     id SERIAL PRIMARY KEY,
-    store_id INTEGER REFERENCES stores(store_id),
-    date DATE NOT NULL,
-    sales FLOAT,
-    customers INTEGER,
-    open INTEGER,
-    promo INTEGER,
-    state_holiday VARCHAR(5),
-    school_holiday INTEGER,
-    UNIQUE (store_id, date)
-);
-
--- Tabel untuk menyimpan hasil prediksi
-CREATE TABLE forecasts (
-    id SERIAL PRIMARY KEY,
-    store_id INTEGER REFERENCES stores(store_id),
-    prediction_date DATE,
-    predicted_sales FLOAT,
-    lower_bound FLOAT,
-    upper_bound FLOAT,
-    is_holiday BOOLEAN DEFAULT FALSE,
+    name VARCHAR(100) NOT NULL,
+    category VARCHAR(50),
+    cost_price DECIMAL(10, 2),
+    selling_price DECIMAL(10, 2),
+    stock INTEGER DEFAULT 100,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabel untuk metadata model (Correction Factor)
-CREATE TABLE model_meta (
-    store_id INTEGER PRIMARY KEY REFERENCES stores(store_id),
-    correction_factor FLOAT,
-    last_trained_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- 2. Tabel Transaksi (Header)
+CREATE TABLE transactions (
+    id VARCHAR(50) PRIMARY KEY, -- Format: TRX-YYYYMMDD-XXXX
+    date TIMESTAMP NOT NULL,
+    total_amount DECIMAL(15, 2),
+    payment_method VARCHAR(20), -- Cash, Credit Card, QRIS
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Tabel Detail Transaksi (Items)
+CREATE TABLE transaction_items (
+    id SERIAL PRIMARY KEY,
+    transaction_id VARCHAR(50) REFERENCES transactions(id),
+    product_id INTEGER REFERENCES products(id),
+    quantity INTEGER,
+    subtotal DECIMAL(15, 2)
+);
+
+-- 4. Tabel Event Kalender (Dari train.csv StateHoliday)
+CREATE TABLE calendar_events (
+    id SERIAL PRIMARY KEY,
+    date DATE NOT NULL UNIQUE,
+    title VARCHAR(100),
+    type VARCHAR(20) -- 'holiday', 'promotion', 'store-closed'
+);
+
+-- 5. Tabel Prediksi (Untuk Prophet nanti)
+CREATE TABLE sales_forecasts (
+    date DATE PRIMARY KEY,
+    predicted_sales DECIMAL(15, 2),
+    lower_bound DECIMAL(15, 2),
+    upper_bound DECIMAL(15, 2)
 );
