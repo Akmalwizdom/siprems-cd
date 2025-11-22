@@ -1,176 +1,275 @@
-import pandas as pd
-import numpy as np
-from sqlalchemy import create_engine, text
 import os
-import uuid
-from datetime import datetime, timedelta
 import random
+import uuid
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 
-# Setup Koneksi Database
+from sqlalchemy import create_engine, text
+
+random.seed(42)
+
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/siprems_db")
 engine = create_engine(DATABASE_URL)
 
-# 1. Definisi Produk Realistis (Sesuai Frontend)
-PRODUCTS = [
-    # Electronics
-    {"name": "Wireless Mouse", "category": "Electronics", "cost": 15, "price": 25},
-    {"name": "Mechanical Keyboard", "category": "Electronics", "cost": 45, "price": 80},
-    {"name": "USB-C Cable", "category": "Electronics", "cost": 4, "price": 10},
-    {"name": "Gaming Headset", "category": "Electronics", "cost": 30, "price": 65},
-    {"name": "24-inch Monitor", "category": "Electronics", "cost": 120, "price": 180},
-    
-    # Stationery
-    {"name": "Notebook A5", "category": "Stationery", "cost": 3, "price": 8},
-    {"name": "Gel Pen Set", "category": "Stationery", "cost": 2, "price": 5},
-    {"name": "Office Stapler", "category": "Stationery", "cost": 4, "price": 9},
-    
-    # Home & Kitchen
-    {"name": "Coffee Mug", "category": "Home & Kitchen", "cost": 5, "price": 12},
-    {"name": "Desk Lamp", "category": "Home & Kitchen", "cost": 20, "price": 40},
-    {"name": "Water Bottle", "category": "Sports", "cost": 8, "price": 18},
-    
-    # Fashion
-    {"name": "Laptop Backpack", "category": "Fashion", "cost": 30, "price": 60},
-    {"name": "Running Shoes", "category": "Sports", "cost": 40, "price": 85},
+# Product catalog (30 items)
+PRODUCT_CATALOG = [
+    # Coffee (10)
+    {"sku": "CF-001", "name": "Heritage Espresso", "category": "Coffee", "cost_price": 1.20, "selling_price": 3.20, "stock": 220, "is_seasonal": False, "description": "Double-shot espresso with caramelized finish."},
+    {"sku": "CF-002", "name": "Midnight Americano", "category": "Coffee", "cost_price": 1.10, "selling_price": 3.50, "stock": 210, "is_seasonal": False, "description": "Bold americano served hot or iced."},
+    {"sku": "CF-003", "name": "Caramel Cloud Latte", "category": "Coffee", "cost_price": 1.60, "selling_price": 4.80, "stock": 200, "is_seasonal": False, "description": "Steamed milk microfoam with burnt caramel."},
+    {"sku": "CF-004", "name": "Velvet Vanilla Latte", "category": "Coffee", "cost_price": 1.55, "selling_price": 4.60, "stock": 180, "is_seasonal": False, "description": "Madagascar vanilla bean latte."},
+    {"sku": "CF-005", "name": "Mocha Truffle", "category": "Coffee", "cost_price": 1.75, "selling_price": 5.10, "stock": 170, "is_seasonal": False, "description": "Dark chocolate mocha with cocoa nibs."},
+    {"sku": "CF-006", "name": "Flat White Reserve", "category": "Coffee", "cost_price": 1.40, "selling_price": 4.20, "stock": 190, "is_seasonal": False, "description": "Silky ristretto blend."},
+    {"sku": "CF-007", "name": "Hazelnut Cappuccino", "category": "Coffee", "cost_price": 1.50, "selling_price": 4.50, "stock": 185, "is_seasonal": False, "description": "Foamy cappuccino with roasted hazelnut."},
+    {"sku": "CF-008", "name": "Nitro Cold Brew", "category": "Coffee", "cost_price": 1.95, "selling_price": 5.60, "stock": 150, "is_seasonal": False, "description": "Slow-steeped cold brew on nitro tap."},
+    {"sku": "CF-009", "name": "Coconut Latte", "category": "Coffee", "cost_price": 1.70, "selling_price": 4.90, "stock": 160, "is_seasonal": False, "description": "Creamy coconut milk latte."},
+    {"sku": "CF-010", "name": "Espresso Tonic", "category": "Coffee", "cost_price": 1.45, "selling_price": 4.30, "stock": 155, "is_seasonal": False, "description": "Citrus tonic layered with espresso."},
+
+    # Tea (5)
+    {"sku": "TE-011", "name": "Jasmine Green Tea", "category": "Tea", "cost_price": 0.90, "selling_price": 3.50, "stock": 140, "is_seasonal": False, "description": "Hand-steeped jasmine pearls."},
+    {"sku": "TE-012", "name": "Earl Grey Creme", "category": "Tea", "cost_price": 1.00, "selling_price": 3.80, "stock": 135, "is_seasonal": False, "description": "Bergamot black tea with vanilla foam."},
+    {"sku": "TE-013", "name": "Masala Chai Latte", "category": "Tea", "cost_price": 1.10, "selling_price": 4.00, "stock": 150, "is_seasonal": False, "description": "Spiced chai with oat milk."},
+    {"sku": "TE-014", "name": "Hibiscus Citrus Cooler", "category": "Tea", "cost_price": 0.95, "selling_price": 3.90, "stock": 130, "is_seasonal": False, "description": "Iced hibiscus tea with yuzu."},
+    {"sku": "TE-015", "name": "Ceremonial Matcha", "category": "Tea", "cost_price": 1.80, "selling_price": 5.40, "stock": 125, "is_seasonal": False, "description": "Stone-ground matcha whisked to order."},
+
+    # Non-coffee beverages (5)
+    {"sku": "NC-016", "name": "Dark Chocolate Frappe", "category": "Non-Coffee", "cost_price": 1.90, "selling_price": 5.80, "stock": 145, "is_seasonal": False, "description": "Rich chocolate frappe with cream."},
+    {"sku": "NC-017", "name": "Salted Caramel Frappe", "category": "Non-Coffee", "cost_price": 1.85, "selling_price": 5.70, "stock": 150, "is_seasonal": False, "description": "Butterscotch caramel shake."},
+    {"sku": "NC-018", "name": "Tropical Sunrise Smoothie", "category": "Non-Coffee", "cost_price": 1.60, "selling_price": 5.10, "stock": 140, "is_seasonal": False, "description": "Mango-pineapple smoothie."},
+    {"sku": "NC-019", "name": "Sparkling Yuzu Ade", "category": "Non-Coffee", "cost_price": 1.30, "selling_price": 4.60, "stock": 135, "is_seasonal": False, "description": "Sparkling citrus cooler."},
+    {"sku": "NC-020", "name": "Charcoal Lemonade", "category": "Non-Coffee", "cost_price": 1.20, "selling_price": 4.30, "stock": 120, "is_seasonal": False, "description": "Activated charcoal detox."},
+
+    # Pastry (5)
+    {"sku": "PS-021", "name": "Butter Croissant", "category": "Pastry", "cost_price": 0.90, "selling_price": 2.80, "stock": 110, "is_seasonal": False, "description": "Layered French butter croissant."},
+    {"sku": "PS-022", "name": "Almond Twice-Baked", "category": "Pastry", "cost_price": 1.10, "selling_price": 3.60, "stock": 105, "is_seasonal": False, "description": "Almond cream croissant."},
+    {"sku": "PS-023", "name": "Cardamom Cinnamon Roll", "category": "Pastry", "cost_price": 1.30, "selling_price": 4.20, "stock": 100, "is_seasonal": False, "description": "Yeasted roll with citrus glaze."},
+    {"sku": "PS-024", "name": "Dark Chocolate Lava Cake", "category": "Pastry", "cost_price": 1.90, "selling_price": 5.90, "stock": 95, "is_seasonal": False, "description": "Molten center mini cake."},
+    {"sku": "PS-025", "name": "Roasted Fruit Tart", "category": "Pastry", "cost_price": 1.50, "selling_price": 4.80, "stock": 98, "is_seasonal": False, "description": "Seasonal fruit tart."},
+
+    # Light meals (3)
+    {"sku": "LM-026", "name": "Truffle Mushroom Toast", "category": "Light Meals", "cost_price": 2.60, "selling_price": 7.80, "stock": 85, "is_seasonal": False, "description": "Sourdough with truffle mushrooms."},
+    {"sku": "LM-027", "name": "Smoked Chicken Sandwich", "category": "Light Meals", "cost_price": 2.90, "selling_price": 8.20, "stock": 90, "is_seasonal": False, "description": "Smoked chicken with herb aioli."},
+    {"sku": "LM-028", "name": "Roasted Veggie Panini", "category": "Light Meals", "cost_price": 2.70, "selling_price": 7.90, "stock": 88, "is_seasonal": False, "description": "Mediterranean veggie panini."},
+
+    # Seasonal menu (2)
+    {"sku": "SN-029", "name": "Pandan Coconut Latte", "category": "Seasonal", "cost_price": 1.80, "selling_price": 5.40, "stock": 130, "is_seasonal": True, "description": "Limited pandan latte."},
+    {"sku": "SN-030", "name": "Strawberry Cheesecake Frappe", "category": "Seasonal", "cost_price": 1.95, "selling_price": 5.90, "stock": 125, "is_seasonal": True, "description": "Summer berry frappe."}
 ]
 
-PAYMENT_METHODS = ['Cash', 'Credit Card', 'QRIS', 'Debit']
+# Calendar events (14 entries)
+CALENDAR_EVENTS = [
+    {"date": date(2024, 12, 1), "title": "Frost & Spice Launch", "type": "promotion", "impact_weight": 0.35, "category": "seasonal-launch", "description": "Seasonal drinks kickoff."},
+    {"date": date(2024, 12, 24), "title": "Christmas Eve Jazz Night", "type": "event", "impact_weight": 0.55, "category": "holiday", "description": "Live music & dessert pairing."},
+    {"date": date(2024, 12, 25), "title": "Christmas Brunch", "type": "holiday", "impact_weight": 0.95, "category": "holiday", "description": "Festive set menu."},
+    {"date": date(2024, 12, 31), "title": "New Year's Eve Countdown", "type": "event", "impact_weight": 0.70, "category": "holiday", "description": "Midnight toast & specials."},
+    {"date": date(2025, 1, 1), "title": "New Year's Day Brunch", "type": "holiday", "impact_weight": 0.80, "category": "holiday", "description": "Recovery brunch combos."},
+    {"date": date(2025, 1, 25), "title": "Payday Treat Promo", "type": "promotion", "impact_weight": 0.45, "category": "payday", "description": "Buy 2 drinks get pastry 50% off."},
+    {"date": date(2025, 2, 3), "title": "Happy Hour 4-6 PM", "type": "event", "impact_weight": 0.40, "category": "time-discount", "description": "Specific-time discount for espresso tonics."},
+    {"date": date(2025, 2, 10), "title": "Cold Drink Happy Hour", "type": "promotion", "impact_weight": 0.40, "category": "cold-drink", "description": "Afternoon iced drink deals."},
+    {"date": date(2025, 2, 14), "title": "Valentine Dessert Duo", "type": "event", "impact_weight": 0.65, "category": "valentine", "description": "Couple set with dessert."},
+    {"date": date(2025, 3, 5), "title": "Equipment Maintenance", "type": "store-closed", "impact_weight": 1.00, "category": "maintenance", "description": "Store closed until noon."},
+    {"date": date(2025, 3, 10), "title": "Ramadan Sunset Specials", "type": "promotion", "impact_weight": 0.75, "category": "ramadan", "description": "Iftar sharing platters."},
+    {"date": date(2025, 4, 1), "title": "Eid al-Fitr Family Bundle", "type": "holiday", "impact_weight": 1.10, "category": "eid", "description": "Family style set."},
+    {"date": date(2025, 4, 20), "title": "Cafe Anniversary Week", "type": "event", "impact_weight": 0.60, "category": "anniversary", "description": "Community latte art jam."},
+    {"date": date(2025, 5, 5), "title": "Community Coffee Tasting", "type": "event", "impact_weight": 0.45, "category": "community", "description": "Local community pairing night."},
+    {"date": date(2025, 5, 20), "title": "Payday Buy 2 Get 1", "type": "promotion", "impact_weight": 0.70, "category": "payday", "description": "Bundle deal on beverages."},
+    {"date": date(2025, 6, 15), "title": "Cold Brew Festival", "type": "promotion", "impact_weight": 0.60, "category": "cold-drink", "description": "Cold drink festival & sampling."},
+    {"date": date(2025, 8, 17), "title": "Independence Day Picnic", "type": "holiday", "impact_weight": 0.85, "category": "national", "description": "Red & white specials for forecasts."}
+]
 
-def seed_products():
-    print("🌱 Seeding Products...")
-    with engine.connect() as conn:
-        conn.execute(text("TRUNCATE TABLE transaction_items, transactions, products CASCADE"))
-        
-        for p in PRODUCTS:
-            # Randomize stock logic
-            stock = random.randint(10, 200)
-            conn.execute(text("""
-                INSERT INTO products (name, category, cost_price, selling_price, stock)
-                VALUES (:name, :cat, :cost, :price, :stock)
-            """), {"name": p['name'], "cat": p['category'], "cost": p['cost'], "price": p['price'], "stock": stock})
-        conn.commit()
-    print("✅ Products seeded.")
+PAYMENT_METHODS = ["Cash", "QRIS", "Debit Card", "Credit Card", "E-Wallet"]
+CUSTOMER_SEGMENTS = ["dine-in", "takeaway", "delivery"]
 
-def seed_transactions_from_csv():
-    print("📈 Reading CSV pattern...")
-    # Baca CSV, filter hanya Store 1 untuk 1 tahun (misal 2013) agar data konsisten
-    df = pd.read_csv("train.csv", parse_dates=['Date'], low_memory=False)
-    df = df[(df['Store'] == 1) & (df['Open'] == 1)].sort_values('Date')
-    
-    # Ambil 1 tahun terakhir dari data yang tersedia di CSV untuk simulasi "Tahun Ini"
-    # Kita akan geser tahunnya ke 2024/2025 agar terlihat 'live' di dashboard
-    latest_year_in_csv = df['Date'].dt.year.max()
-    df_sample = df[df['Date'].dt.year == latest_year_in_csv].copy()
-    
-    # Mapping produk ID dari DB
-    product_df = pd.read_sql("SELECT * FROM products", engine)
-    product_list = product_df.to_dict('records')
-    
-    print(f"🚀 Generating transactions based on {len(df_sample)} days of sales data...")
-    
-    transactions_data = []
-    items_data = []
-    calendar_data = []
-    
-    # Shift dates to current year (e.g., simulate data ending today)
-    target_end_date = datetime.now()
-    source_end_date = df_sample['Date'].max()
-    date_offset = target_end_date - source_end_date
-    
-    transaction_counter = 0
-    
-    with engine.connect() as conn:
-        for _, row in df_sample.iterrows():
-            # Tanggal simulasi
-            sim_date = row['Date'] + date_offset
-            
-            # Target penjualan hari itu dari CSV
-            target_sales = row['Sales']
-            if target_sales <= 0: continue
-            
-            # Simpan Event Kalender jika libur/promo
-            if row['StateHoliday'] != '0':
-                title = "Public Holiday"
-                if row['StateHoliday'] == 'a': title = "Public Holiday"
-                elif row['StateHoliday'] == 'b': title = "Easter Holiday"
-                elif row['StateHoliday'] == 'c': title = "Christmas"
-                
-                conn.execute(text("""
-                    INSERT INTO calendar_events (date, title, type) 
-                    VALUES (:date, :title, 'holiday')
-                    ON CONFLICT DO NOTHING
-                """), {"date": sim_date.date(), "title": title})
-            
-            elif row['Promo'] == 1:
-                 conn.execute(text("""
-                    INSERT INTO calendar_events (date, title, type) 
-                    VALUES (:date, :title, 'promotion')
-                    ON CONFLICT DO NOTHING
-                """), {"date": sim_date.date(), "title": "Seasonal Promo"})
+HOUR_DISTRIBUTION = {
+    7: 1,
+    8: 3,
+    9: 4,
+    10: 3,
+    11: 5,
+    12: 6,
+    13: 5,
+    14: 4,
+    15: 4,
+    16: 4,
+    17: 5,
+    18: 6,
+    19: 5,
+    20: 4,
+    21: 3,
+    22: 2
+}
 
-            # Generate Transaksi sampai target sales tercapai
-            current_sales = 0
-            while current_sales < target_sales:
-                # 1 Transaksi bisa beli 1-3 jenis barang
-                num_items = random.choices([1, 2, 3], weights=[60, 30, 10])[0]
-                selected_products = random.sample(product_list, k=min(num_items, len(product_list)))
-                
-                trx_id = f"TRX-{sim_date.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
-                trx_total = 0
-                
-                # Generate jam acak antara 08:00 - 21:00
-                hour = random.randint(8, 20)
-                minute = random.randint(0, 59)
-                trx_time = sim_date.replace(hour=hour, minute=minute)
-                
-                items_buffer = []
-                
-                for p in selected_products:
-                    qty = random.randint(1, 3)
-                    subtotal = p['selling_price'] * qty
-                    trx_total += subtotal
-                    
-                    items_buffer.append({
-                        "transaction_id": trx_id,
-                        "product_id": p['id'],
-                        "quantity": qty,
-                        "subtotal": subtotal
-                    })
-                
-                current_sales += trx_total
-                
-                # Simpan Header Transaksi
-                conn.execute(text("""
-                    INSERT INTO transactions (id, date, total_amount, payment_method)
-                    VALUES (:id, :date, :total, :pm)
-                """), {
-                    "id": trx_id,
-                    "date": trx_time,
-                    "total": trx_total,
-                    "pm": random.choice(PAYMENT_METHODS)
+SEGMENT_WEIGHTS = {
+    "morning": {"Coffee": 0.55, "Tea": 0.10, "Pastry": 0.25, "Light Meals": 0.05, "Non-Coffee": 0.03, "Seasonal": 0.02},
+    "midday": {"Coffee": 0.38, "Tea": 0.10, "Pastry": 0.15, "Light Meals": 0.22, "Non-Coffee": 0.10, "Seasonal": 0.05},
+    "afternoon": {"Coffee": 0.30, "Tea": 0.18, "Pastry": 0.18, "Light Meals": 0.08, "Non-Coffee": 0.18, "Seasonal": 0.08},
+    "evening": {"Coffee": 0.42, "Tea": 0.08, "Pastry": 0.12, "Light Meals": 0.18, "Non-Coffee": 0.12, "Seasonal": 0.08}
+}
+
+START_DATE = date(2024, 12, 1)
+NUM_DAYS = 183  # ~6 months through end of May 2025
+
+
+def reset_tables(conn):
+    conn.execute(text("""
+        TRUNCATE TABLE sales_forecasts, transaction_items, transactions, calendar_events, products
+        RESTART IDENTITY CASCADE
+    """))
+
+
+def seed_products(conn):
+    insert_sql = text("""
+        INSERT INTO products (name, category, sku, description, cost_price, selling_price, stock, is_seasonal)
+        VALUES (:name, :category, :sku, :description, :cost_price, :selling_price, :stock, :is_seasonal)
+    """)
+    conn.execute(insert_sql, PRODUCT_CATALOG)
+    rows = conn.execute(text("SELECT id, name, category, selling_price FROM products"))
+    return [dict(row._mapping) for row in rows]
+
+
+def seed_calendar(conn):
+    insert_sql = text("""
+        INSERT INTO calendar_events (date, title, type, impact_weight, category, description)
+        VALUES (:date, :title, :type, :impact_weight, :category, :description)
+    """)
+    conn.execute(insert_sql, CALENDAR_EVENTS)
+
+
+def segment_for_hour(hour: int) -> str:
+    if 7 <= hour < 11:
+        return "morning"
+    if 11 <= hour < 15:
+        return "midday"
+    if 15 <= hour < 18:
+        return "afternoon"
+    return "evening"
+
+
+def determine_quantity(category: str) -> int:
+    if category in {"Pastry", "Light Meals"}:
+        return random.randint(1, 2)
+    if category == "Seasonal":
+        return random.randint(1, 3)
+    return random.randint(1, 2)
+
+
+def calculate_daily_target(current_date: date, events_map: dict) -> int:
+    weekday = current_date.weekday()
+    base = random.randint(30, 60) if weekday < 5 else random.randint(70, 110)
+    day_events = events_map.get(current_date, [])
+    if any(evt["type"] == "store-closed" for evt in day_events):
+        return random.randint(2, 6)
+    boost = sum(evt["impact_weight"] for evt in day_events)
+    boosted = int(round(base * (1 + boost)))
+    cap = 120 if weekday < 5 else 150
+    floor = 20 if weekday < 5 else 45
+    return max(floor, min(boosted, cap))
+
+
+def pick_product(segment: str, category_map, all_products, used_ids):
+    weights = SEGMENT_WEIGHTS[segment]
+    categories = list(weights.keys())
+    probs = [weights[cat] for cat in categories]
+    for _ in range(5):
+        chosen_category = random.choices(categories, weights=probs, k=1)[0]
+        bucket = category_map.get(chosen_category)
+        if not bucket:
+            continue
+        candidate = random.choice(bucket)
+        if candidate["id"] not in used_ids or len(bucket) == 1:
+            return candidate
+    fallback = [p for p in all_products if p["id"] not in used_ids] or all_products
+    return random.choice(fallback)
+
+
+def build_transactions(product_rows):
+    category_map = defaultdict(list)
+    for prod in product_rows:
+        category_map[prod["category"]].append(prod)
+    all_products = [prod for prod in product_rows]
+
+    events_map = defaultdict(list)
+    for evt in CALENDAR_EVENTS:
+        events_map[evt["date"]].append(evt)
+
+    hour_choices = list(HOUR_DISTRIBUTION.keys())
+    hour_weights = list(HOUR_DISTRIBUTION.values())
+
+    transactions_batch = []
+    items_batch = []
+
+    current_date = START_DATE
+    for day_index in range(NUM_DAYS):
+        tx_count = calculate_daily_target(current_date, events_map)
+        for _ in range(tx_count):
+            transaction_id = str(uuid.uuid4())
+            hour = random.choices(hour_choices, weights=hour_weights, k=1)[0]
+            minute = random.randint(0, 59)
+            timestamp = datetime(current_date.year, current_date.month, current_date.day, hour, minute)
+            segment = segment_for_hour(hour)
+
+            num_products = random.choices([1, 2, 3, 4], weights=[45, 30, 18, 7], k=1)[0]
+            used_ids = set()
+            line_items = []
+            for _ in range(num_products):
+                product = pick_product(segment, category_map, all_products, used_ids)
+                qty = determine_quantity(product["category"])
+                subtotal = round(product["selling_price"] * qty, 2)
+                line_items.append({
+                    "transaction_id": transaction_id,
+                    "product_id": product["id"],
+                    "quantity": qty,
+                    "unit_price": product["selling_price"],
+                    "subtotal": subtotal
                 })
-                
-                # Simpan Items
-                for item in items_buffer:
-                    conn.execute(text("""
-                        INSERT INTO transaction_items (transaction_id, product_id, quantity, subtotal)
-                        VALUES (:tid, :pid, :qty, :sub)
-                    """), {
-                        "tid": item['transaction_id'],
-                        "pid": item['product_id'],
-                        "qty": item['quantity'],
-                        "sub": item['subtotal']
-                    })
-                
-                transaction_counter += 1
-                
-            if transaction_counter % 100 == 0:
-                print(f"   Processed {sim_date.date()} | Generated {transaction_counter} txns so far...")
-                conn.commit()
-                
-        conn.commit()
-    print(f"✅ Finished! Total transactions generated: {transaction_counter}")
+                used_ids.add(product["id"])
+
+            total_amount = round(sum(item["subtotal"] for item in line_items), 2)
+            items_count = sum(item["quantity"] for item in line_items)
+
+            transactions_batch.append({
+                "id": transaction_id,
+                "date": timestamp,
+                "total_amount": total_amount,
+                "payment_method": random.choice(PAYMENT_METHODS),
+                "customer_segment": random.choices(CUSTOMER_SEGMENTS, weights=[0.55, 0.35, 0.10])[0],
+                "items_count": items_count
+            })
+            items_batch.extend(line_items)
+
+        current_date += timedelta(days=1)
+
+    return transactions_batch, items_batch
+
+
+def insert_transactions(conn, transactions_batch, items_batch):
+    tx_sql = text("""
+        INSERT INTO transactions (id, date, total_amount, payment_method, customer_segment, items_count)
+        VALUES (:id, :date, :total_amount, :payment_method, :customer_segment, :items_count)
+    """)
+    item_sql = text("""
+        INSERT INTO transaction_items (transaction_id, product_id, quantity, unit_price, subtotal)
+        VALUES (:transaction_id, :product_id, :quantity, :unit_price, :subtotal)
+    """)
+
+    conn.execute(tx_sql, transactions_batch)
+    conn.execute(item_sql, items_batch)
+
+
+def main():
+    with engine.begin() as conn:
+        reset_tables(conn)
+        product_rows = seed_products(conn)
+        seed_calendar(conn)
+        transactions_batch, items_batch = build_transactions(product_rows)
+        insert_transactions(conn, transactions_batch, items_batch)
+
+    total_transactions = len(transactions_batch)
+    avg_per_day = total_transactions / NUM_DAYS
+    print(f"Seeded {len(PRODUCT_CATALOG)} products, {len(CALENDAR_EVENTS)} calendar events.")
+    print(f"Generated {total_transactions} transactions (~{avg_per_day:.1f}/day) across {NUM_DAYS} days.")
+    print(f"Generated {len(items_batch)} transaction line items to power Prophet forecasts.")
+
 
 if __name__ == "__main__":
-    seed_products()
-    seed_transactions_from_csv()
+    main()

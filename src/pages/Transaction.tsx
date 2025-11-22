@@ -1,10 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, Minus, Trash2, ShoppingCart, Loader2 } from 'lucide-react';
 import { Product, CartItem } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
-const categories = ['All', 'Electronics', 'Home & Kitchen', 'Stationery', 'Sports', 'Fashion'];
-
 export function Transaction() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +34,8 @@ export function Transaction() {
       setLoading(false);
     }
   };
+
+  const categoryFilters = useMemo(() => ['All', ...Array.from(new Set(products.map((p) => p.category)))], [products]);
 
   const filteredProducts = products.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -118,7 +118,7 @@ export function Transaction() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
+            {categoryFilters.map((category) => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}

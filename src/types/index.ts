@@ -60,6 +60,8 @@ export interface PredictionData {
   predicted: number | null;
   isHoliday: boolean;
   holidayName?: string;
+  lower?: number;
+  upper?: number;
 }
 
 export interface RestockRecommendation {
@@ -69,16 +71,22 @@ export interface RestockRecommendation {
   predictedDemand: number;
   recommendedRestock: number;
   urgency: 'low' | 'medium' | 'high';
+  category?: string;
 }
 
 export interface CalendarEventType {
   date: string;
-  type: 'promotion' | 'holiday' | 'store-closed';
+  type: 'promotion' | 'holiday' | 'store-closed' | 'event';
   title?: string;
+  impact?: number;
 }
 
 export interface PredictionResponseMeta {
   applied_factor: number;
+  historicalDays?: number;
+  forecastDays?: number;
+  lastHistoricalDate?: string;
+  regressors?: string[];
 }
 
 export interface StoreSettings {

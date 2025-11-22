@@ -10,6 +10,7 @@ const eventTypeConfig = {
   promotion: { color: 'bg-blue-500', label: 'Promotion', bgLight: 'bg-blue-50', textColor: 'text-blue-700', borderColor: 'border-blue-200' },
   holiday: { color: 'bg-purple-500', label: 'Holiday', bgLight: 'bg-purple-50', textColor: 'text-purple-700', borderColor: 'border-purple-200' },
   'store-closed': { color: 'bg-red-500', label: 'Store Closed', bgLight: 'bg-red-50', textColor: 'text-red-700', borderColor: 'border-red-200' },
+  event: { color: 'bg-green-500', label: 'Event', bgLight: 'bg-green-50', textColor: 'text-green-700', borderColor: 'border-green-200' },
 };
 
 export function Calendar() {
@@ -430,6 +431,7 @@ export function Calendar() {
                   <option value="promotion">Promotion</option>
                   <option value="holiday">Holiday</option>
                   <option value="store-closed">Store Closed</option>
+                  <option value="event">Event</option>
                 </select>
               </div>
 

@@ -6,8 +6,10 @@ export interface CalendarEvent {
   id: string;
   title: string;
   date: string;
-  type: 'promotion' | 'holiday' | 'store-closed';
+  type: 'promotion' | 'holiday' | 'store-closed' | 'event';
   description?: string;
+  impact?: number;
+  category?: string;
 }
 
 interface StoreContextType {
@@ -38,8 +40,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         id: `${index + 1}`,
         title: e.title,
         date: e.date,
-        type: e.type as 'promotion' | 'holiday' | 'store-closed',
-        description: e.description || ''
+        type: (e.type as CalendarEvent['type']) || 'promotion',
+        description: e.description || '',
+        impact: e.impact_weight ?? e.impact ?? 0.3,
+        category: e.category
       }));
       setEvents(formattedEvents);
     } catch (error) {

@@ -4,8 +4,9 @@ const API_BASE_URL = 'http://localhost:8000/api';
 
 export interface CalendarEvent {
   date: string;
-  type: 'promotion' | 'holiday' | 'store-closed';
+  type: 'promotion' | 'holiday' | 'store-closed' | 'event';
   title?: string;
+  impact?: number;
 }
 
 export interface PredictionRequest {
@@ -23,6 +24,8 @@ export interface PredictionResponse {
     predicted: number | null;
     isHoliday: boolean;
     holidayName?: string;
+    lower?: number;
+    upper?: number;
   }>;
   recommendations: Array<{
     productId: string;
@@ -31,9 +34,19 @@ export interface PredictionResponse {
     predictedDemand: number;
     recommendedRestock: number;
     urgency: 'high' | 'medium' | 'low';
+    category?: string;
+  }>;
+  eventAnnotations: Array<{
+    date: string;
+    titles: string[];
+    types: string[];
   }>;
   meta: {
     applied_factor: number;
+    historicalDays?: number;
+    forecastDays?: number;
+    lastHistoricalDate?: string;
+    regressors?: string[];
   };
 }
 

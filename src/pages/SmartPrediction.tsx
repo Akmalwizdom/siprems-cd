@@ -13,6 +13,8 @@ export function SmartPrediction() {
   const [showChatbot, setShowChatbot] = useState(false);
   const [predictionData, setPredictionData] = useState<PredictionData[]>([]);
   const [restockRecommendations, setRestockRecommendations] = useState<RestockRecommendation[]>([]);
+  const [predictionMeta, setPredictionMeta] = useState<PredictionResponse['meta'] | null>(null);
+  const [eventAnnotations, setEventAnnotations] = useState<PredictionResponse['eventAnnotations']>([]);
   const [error, setError] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([
     {
@@ -28,10 +30,18 @@ export function SmartPrediction() {
 
     try {
       // Convert StoreContext events to API format
+      const impactDefaults: Record<string, number> = {
+        promotion: 0.4,
+        holiday: 0.9,
+        event: 0.5,
+        'store-closed': 1,
+      };
+
       const apiEvents = events.map(event => ({
         date: event.date,
         type: event.type,
         title: event.title,
+        impact: event.impact ?? impactDefaults[event.type] ?? 0.3,
       }));
 
       // Call the API
@@ -40,12 +50,15 @@ export function SmartPrediction() {
       if (response.status === 'success') {
         setPredictionData(response.chartData);
         setRestockRecommendations(response.recommendations);
+        setPredictionMeta(response.meta);
+        setEventAnnotations(response.eventAnnotations || []);
 
         // Update chatbot with insights
         const firstHoliday = response.chartData.find(d => d.isHoliday);
+        const factorInfo = response.meta?.applied_factor ? response.meta.applied_factor.toFixed(2) : '1.00';
         const initialMessage = firstHoliday
           ? `Sales spike predicted around ${firstHoliday.date}. Historical data shows significant increase during ${firstHoliday.holidayName}. Consider restocking high-demand items early.`
-          : 'Prediction complete. Review the forecast and recommendations below.';
+          : `Prediction complete. Applied growth factor ${factorInfo}. Review the forecast and recommendations below.`;
 
         setChatMessages([{
           role: 'assistant',
@@ -225,6 +238,31 @@ export function SmartPrediction() {
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
         {/* Main Area (70%) */}
         <div className="lg:col-span-7 space-y-6">
+          {predictionMeta && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white rounded-xl p-4 border border-slate-200">
+                <p className="text-slate-500 text-sm">Historical Window</p>
+                <p className="text-slate-900 text-lg font-semibold">{predictionMeta.historicalDays} days</p>
+                <p className="text-xs text-slate-500">Last date: {predictionMeta.lastHistoricalDate}</p>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-slate-200">
+                <p className="text-slate-500 text-sm">Forecast Horizon</p>
+                <p className="text-slate-900 text-lg font-semibold">{predictionMeta.forecastDays} days</p>
+                <p className="text-xs text-slate-500">Growth factor {predictionMeta.applied_factor?.toFixed(2)}</p>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-slate-200">
+                <p className="text-slate-500 text-sm">Regressors</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(predictionMeta.regressors || []).map((reg) => (
+                    <span key={reg} className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                      {reg}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Forecast Chart */}
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="mb-6">
@@ -309,7 +347,12 @@ export function SmartPrediction() {
                 >
                   <div className="flex-1">
                     <h3 className="text-slate-900 mb-1">{item.productName}</h3>
-                    <div className="flex items-center gap-4 text-sm text-slate-600">
+                    <div className="flex items-center gap-4 text-sm text-slate-600 flex-wrap">
+                      {item.category && (
+                        <span className="text-xs px-2 py-1 bg-white border border-slate-200 rounded-full">
+                          {item.category}
+                        </span>
+                      )}
                       <span>Current: {item.currentStock}</span>
                       <span>Predicted: {item.predictedDemand}</span>
                       <span className="text-indigo-600">
@@ -326,6 +369,30 @@ export function SmartPrediction() {
               ))}
             </div>
           </div>
+
+          {eventAnnotations.length > 0 && (
+            <div className="bg-white rounded-xl p-6 border border-slate-200">
+              <div className="mb-4">
+                <h2 className="text-slate-900 mb-1">Event Timeline</h2>
+                <p className="text-slate-500 text-sm">Prophet considers these promotions & holidays</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {eventAnnotations.slice(0, 6).map((event) => (
+                  <div key={event.date} className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+                    <p className="text-slate-900 font-medium">{event.date}</p>
+                    <p className="text-sm text-slate-600">{event.titles.join(', ')}</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {event.types.map((type) => (
+                        <span key={type} className="text-xs px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-600">
+                          {type}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Support Area (30%) - Smart Insight Panel */}

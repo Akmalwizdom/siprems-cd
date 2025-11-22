@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, ShoppingBag, Package, AlertCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { TimeRange, DashboardMetrics } from '../types';
+import { TimeRange, DashboardMetrics, CategorySales } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -12,19 +12,12 @@ const timeRanges: { value: TimeRange; label: string }[] = [
   { value: 'year', label: 'This Year' },
 ];
 
-const categorySales = [
-  { category: 'Electronics', value: 2487, color: '#3b82f6' },
-  { category: 'Home & Kitchen', value: 1823, color: '#ef4444' },
-  { category: 'Stationery', value: 1463, color: '#f59e0b' },
-  { category: 'Sports', value: 987, color: '#10b981' },
-  { category: 'Fashion', value: 1245, color: '#8b5cf6' },
-];
-
 export function Dashboard() {
   const [selectedRange, setSelectedRange] = useState<TimeRange>('month');
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [salesData, setSalesData] = useState<any[]>([]);
   const [criticalStockItems, setCriticalStockItems] = useState<any[]>([]);
+  const [categorySales, setCategorySales] = useState<CategorySales[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,18 +27,21 @@ export function Dashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [metricsRes, salesRes, productsRes] = await Promise.all([
+      const [metricsRes, salesRes, productsRes, categoryRes] = await Promise.all([
         fetch(`${API_BASE_URL}/dashboard/metrics`),
         fetch(`${API_BASE_URL}/dashboard/sales-chart`),
-        fetch(`${API_BASE_URL}/products`)
+        fetch(`${API_BASE_URL}/products`),
+        fetch(`${API_BASE_URL}/dashboard/category-sales`)
       ]);
 
       const metricsData = await metricsRes.json();
       const salesDataRaw = await salesRes.json();
       const productsData = await productsRes.json();
+      const categoryData = await categoryRes.json();
 
       setMetrics(metricsData);
       setSalesData(salesDataRaw);
+      setCategorySales(categoryData);
       setCriticalStockItems(productsData.filter((p: any) => p.stock < 5));
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -199,6 +195,9 @@ export function Dashboard() {
             </PieChart>
           </ResponsiveContainer>
           <div className="space-y-2 mt-4">
+            {categorySales.length === 0 && (
+              <p className="text-sm text-slate-500">No category data yet</p>
+            )}
             {categorySales.map((cat) => (
               <div key={cat.category} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
