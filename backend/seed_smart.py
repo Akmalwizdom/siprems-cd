@@ -56,26 +56,38 @@ PRODUCT_CATALOG = [
     {"sku": "SN-030", "name": "Strawberry Cheesecake Frappe", "category": "Seasonal", "cost_price": 1.95, "selling_price": 5.90, "stock": 125, "is_seasonal": True, "description": "Summer berry frappe."}
 ]
 
-# Calendar events (14 entries)
-CALENDAR_EVENTS = [
-    {"date": date(2024, 12, 1), "title": "Frost & Spice Launch", "type": "promotion", "impact_weight": 0.35, "category": "seasonal-launch", "description": "Seasonal drinks kickoff."},
-    {"date": date(2024, 12, 24), "title": "Christmas Eve Jazz Night", "type": "event", "impact_weight": 0.55, "category": "holiday", "description": "Live music & dessert pairing."},
-    {"date": date(2024, 12, 25), "title": "Christmas Brunch", "type": "holiday", "impact_weight": 0.95, "category": "holiday", "description": "Festive set menu."},
-    {"date": date(2024, 12, 31), "title": "New Year's Eve Countdown", "type": "event", "impact_weight": 0.70, "category": "holiday", "description": "Midnight toast & specials."},
-    {"date": date(2025, 1, 1), "title": "New Year's Day Brunch", "type": "holiday", "impact_weight": 0.80, "category": "holiday", "description": "Recovery brunch combos."},
-    {"date": date(2025, 1, 25), "title": "Payday Treat Promo", "type": "promotion", "impact_weight": 0.45, "category": "payday", "description": "Buy 2 drinks get pastry 50% off."},
-    {"date": date(2025, 2, 3), "title": "Happy Hour 4-6 PM", "type": "event", "impact_weight": 0.40, "category": "time-discount", "description": "Specific-time discount for espresso tonics."},
-    {"date": date(2025, 2, 10), "title": "Cold Drink Happy Hour", "type": "promotion", "impact_weight": 0.40, "category": "cold-drink", "description": "Afternoon iced drink deals."},
-    {"date": date(2025, 2, 14), "title": "Valentine Dessert Duo", "type": "event", "impact_weight": 0.65, "category": "valentine", "description": "Couple set with dessert."},
-    {"date": date(2025, 3, 5), "title": "Equipment Maintenance", "type": "store-closed", "impact_weight": 1.00, "category": "maintenance", "description": "Store closed until noon."},
-    {"date": date(2025, 3, 10), "title": "Ramadan Sunset Specials", "type": "promotion", "impact_weight": 0.75, "category": "ramadan", "description": "Iftar sharing platters."},
-    {"date": date(2025, 4, 1), "title": "Eid al-Fitr Family Bundle", "type": "holiday", "impact_weight": 1.10, "category": "eid", "description": "Family style set."},
-    {"date": date(2025, 4, 20), "title": "Cafe Anniversary Week", "type": "event", "impact_weight": 0.60, "category": "anniversary", "description": "Community latte art jam."},
-    {"date": date(2025, 5, 5), "title": "Community Coffee Tasting", "type": "event", "impact_weight": 0.45, "category": "community", "description": "Local community pairing night."},
-    {"date": date(2025, 5, 20), "title": "Payday Buy 2 Get 1", "type": "promotion", "impact_weight": 0.70, "category": "payday", "description": "Bundle deal on beverages."},
-    {"date": date(2025, 6, 15), "title": "Cold Brew Festival", "type": "promotion", "impact_weight": 0.60, "category": "cold-drink", "description": "Cold drink festival & sampling."},
-    {"date": date(2025, 8, 17), "title": "Independence Day Picnic", "type": "holiday", "impact_weight": 0.85, "category": "national", "description": "Red & white specials for forecasts."}
-]
+# Calendar events will be generated dynamically based on START_DATE
+# This function will be called after START_DATE is determined
+def generate_calendar_events(start_date, num_days):
+    """Generate calendar events spread throughout the date range"""
+    events = []
+    end_date = start_date + timedelta(days=num_days - 1)
+    
+    # Spread events throughout the 6-month period
+    events.append({"date": start_date + timedelta(days=5), "title": "Seasonal Menu Launch", "type": "promotion", "impact_weight": 0.35, "category": "seasonal-launch", "description": "New seasonal drinks kickoff."})
+    events.append({"date": start_date + timedelta(days=15), "title": "Weekend Jazz Night", "type": "event", "impact_weight": 0.55, "category": "entertainment", "description": "Live music & dessert pairing."})
+    events.append({"date": start_date + timedelta(days=25), "title": "Payday Treat Promo", "type": "promotion", "impact_weight": 0.45, "category": "payday", "description": "Buy 2 drinks get pastry 50% off."})
+    events.append({"date": start_date + timedelta(days=35), "title": "Happy Hour Special", "type": "event", "impact_weight": 0.40, "category": "time-discount", "description": "Afternoon beverage discounts."})
+    events.append({"date": start_date + timedelta(days=45), "title": "Cold Drink Festival", "type": "promotion", "impact_weight": 0.40, "category": "cold-drink", "description": "Iced drinks special pricing."})
+    events.append({"date": start_date + timedelta(days=50), "title": "Valentine Celebration", "type": "event", "impact_weight": 0.65, "category": "valentine", "description": "Couple dessert sets."})
+    events.append({"date": start_date + timedelta(days=60), "title": "Equipment Maintenance", "type": "store-closed", "impact_weight": 1.00, "category": "maintenance", "description": "Store closed until noon."})
+    events.append({"date": start_date + timedelta(days=70), "title": "Spring Menu Launch", "type": "promotion", "impact_weight": 0.75, "category": "seasonal", "description": "Fresh spring beverages."})
+    events.append({"date": start_date + timedelta(days=85), "title": "Community Gathering", "type": "holiday", "impact_weight": 1.10, "category": "community", "description": "Local community event."})
+    events.append({"date": start_date + timedelta(days=95), "title": "Cafe Anniversary Week", "type": "event", "impact_weight": 0.60, "category": "anniversary", "description": "Anniversary celebrations."})
+    events.append({"date": start_date + timedelta(days=105), "title": "Coffee Tasting Event", "type": "event", "impact_weight": 0.45, "category": "community", "description": "Local roaster tasting."})
+    events.append({"date": start_date + timedelta(days=120), "title": "Payday Super Sale", "type": "promotion", "impact_weight": 0.70, "category": "payday", "description": "Buy 2 get 1 free."})
+    events.append({"date": start_date + timedelta(days=140), "title": "Summer Cooler Launch", "type": "promotion", "impact_weight": 0.60, "category": "cold-drink", "description": "New cold beverage lineup."})
+    events.append({"date": start_date + timedelta(days=155), "title": "Independence Day Special", "type": "holiday", "impact_weight": 0.85, "category": "national", "description": "Patriotic themed menu."})
+    events.append({"date": start_date + timedelta(days=165), "title": "Mid-Season Sale", "type": "promotion", "impact_weight": 0.50, "category": "sale", "description": "Special discounts on select items."})
+    events.append({"date": start_date + timedelta(days=175), "title": "Customer Appreciation Day", "type": "event", "impact_weight": 0.55, "category": "customer", "description": "Thank you event for loyal customers."})
+    
+    # Add a few future events for forecasting (7-60 days ahead)
+    events.append({"date": end_date + timedelta(days=10), "title": "Upcoming Holiday Promo", "type": "promotion", "impact_weight": 0.60, "category": "upcoming", "description": "Planned promotional event."})
+    events.append({"date": end_date + timedelta(days=25), "title": "New Product Launch", "type": "event", "impact_weight": 0.70, "category": "upcoming", "description": "Exciting new menu items."})
+    
+    return events
+
+CALENDAR_EVENTS = []  # Will be populated in main()
 
 PAYMENT_METHODS = ["Cash", "QRIS", "Debit Card", "Credit Card", "E-Wallet"]
 CUSTOMER_SEGMENTS = ["dine-in", "takeaway", "delivery"]
@@ -106,8 +118,10 @@ SEGMENT_WEIGHTS = {
     "evening": {"Coffee": 0.42, "Tea": 0.08, "Pastry": 0.12, "Light Meals": 0.18, "Non-Coffee": 0.12, "Seasonal": 0.08}
 }
 
-START_DATE = date(2024, 12, 1)
-NUM_DAYS = 183  # ~6 months through end of May 2025
+# Generate data ending ~7 days ago so there's recent historical data
+END_DATE = date.today() - timedelta(days=7)
+NUM_DAYS = 183  # ~6 months
+START_DATE = END_DATE - timedelta(days=NUM_DAYS - 1)
 
 
 def reset_tables(conn):
@@ -257,6 +271,11 @@ def insert_transactions(conn, transactions_batch, items_batch):
 
 
 def main():
+    global CALENDAR_EVENTS
+    
+    # Generate dynamic calendar events based on the calculated date range
+    CALENDAR_EVENTS = generate_calendar_events(START_DATE, NUM_DAYS)
+    
     with engine.begin() as conn:
         reset_tables(conn)
         product_rows = seed_products(conn)
@@ -266,6 +285,7 @@ def main():
 
     total_transactions = len(transactions_batch)
     avg_per_day = total_transactions / NUM_DAYS
+    print(f"Date range: {START_DATE} to {START_DATE + timedelta(days=NUM_DAYS - 1)}")
     print(f"Seeded {len(PRODUCT_CATALOG)} products, {len(CALENDAR_EVENTS)} calendar events.")
     print(f"Generated {total_transactions} transactions (~{avg_per_day:.1f}/day) across {NUM_DAYS} days.")
     print(f"Generated {len(items_batch)} transaction line items to power Prophet forecasts.")
