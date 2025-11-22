@@ -275,20 +275,40 @@ def get_category_sales():
     return results
 
 @app.get("/api/products")
-def get_products():
-    query = """
-        WITH lifetime AS (
+def get_products(
+    page: int = 1, 
+    limit: int = 10, 
+    search: Optional[str] = None
+):
+    offset = (page - 1) * limit
+    
+    # Base query
+    base_query = """
+        FROM products p
+        LEFT JOIN (
             SELECT product_id, SUM(quantity) AS units
             FROM transaction_items
             GROUP BY product_id
-        ),
-        recent AS (
+        ) lifetime ON lifetime.product_id = p.id
+        LEFT JOIN (
             SELECT ti.product_id, SUM(ti.quantity) AS units
             FROM transaction_items ti
             JOIN transactions t ON t.id = ti.transaction_id
             WHERE t.date >= NOW() - INTERVAL '30 days'
             GROUP BY ti.product_id
-        )
+        ) recent ON recent.product_id = p.id
+    """
+    
+    where_clause = ""
+    params = {"limit": limit, "offset": offset}
+    
+    if search:
+        where_clause = "WHERE p.name ILIKE :search OR p.category ILIKE :search OR p.sku ILIKE :search"
+        params["search"] = f"%{search}%"
+        
+    count_query = f"SELECT COUNT(*) {base_query} {where_clause}"
+    
+    data_query = f"""
         SELECT 
             p.id,
             p.name,
@@ -301,13 +321,65 @@ def get_products():
             p.is_seasonal,
             COALESCE(lifetime.units, 0) AS sold_count,
             COALESCE(recent.units, 0) AS sold_last_30
-        FROM products p
-        LEFT JOIN lifetime ON lifetime.product_id = p.id
-        LEFT JOIN recent ON recent.product_id = p.id
+        {base_query}
+        {where_clause}
         ORDER BY p.category, p.name
+        LIMIT :limit OFFSET :offset
     """
-    df = pd.read_sql(query, engine)
-    return df.to_dict(orient="records")
+    
+    with engine.connect() as conn:
+        total = conn.execute(text(count_query), params).scalar()
+        result = conn.execute(text(data_query), params).mappings().all()
+        
+    return {
+        "data": [dict(row) for row in result],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
+
+@app.get("/api/transactions")
+def get_transactions(
+    page: int = 1, 
+    limit: int = 10
+):
+    offset = (page - 1) * limit
+    
+    query = """
+        SELECT 
+            id,
+            date,
+            total_amount,
+            payment_method,
+            customer_segment,
+            items_count,
+            created_at
+        FROM transactions
+        ORDER BY date DESC
+        LIMIT :limit OFFSET :offset
+    """
+    
+    count_query = "SELECT COUNT(*) FROM transactions"
+    
+    with engine.connect() as conn:
+        total = conn.execute(text(count_query)).scalar()
+        result = conn.execute(text(query), {"limit": limit, "offset": offset}).mappings().all()
+        
+        transactions = []
+        for row in result:
+            t = dict(row)
+            t['date'] = t['date'].isoformat() if t['date'] else None
+            t['created_at'] = t['created_at'].isoformat() if t['created_at'] else None
+            transactions.append(t)
+            
+    return {
+        "data": transactions,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
 @app.get("/api/calendar/events")
 def get_calendar_events():

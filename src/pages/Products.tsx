@@ -1,13 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Upload, X, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Upload, X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
 export function Products() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -20,16 +28,32 @@ export function Products() {
     description: '',
   });
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1); // Reset to page 1 on search
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [page, debouncedSearch]);
 
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/products`);
+      const query = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        ...(debouncedSearch && { search: debouncedSearch })
+      });
+      
+      const response = await fetch(`${API_BASE_URL}/products?${query}`);
       const data = await response.json();
-      setProducts(data.map((p: any) => ({
+      
+      setProducts(data.data.map((p: any) => ({
         id: p.id.toString(),
         name: p.name,
         category: p.category,
@@ -38,16 +62,16 @@ export function Products() {
         stock: p.stock,
         description: p.description || ''
       })));
+      
+      setTotalPages(data.total_pages);
+      setTotalItems(data.total);
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }; 
 
-  const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const getStockStatus = (stock: number): 'critical' | 'low' | 'good' => {
     if (stock < 5) return 'critical';
@@ -108,7 +132,7 @@ export function Products() {
     
     if (editingProduct) {
       setProducts(
-        products.map((p) =>
+        filteredProducts.map((p) =>
           p.id === editingProduct.id ? { ...formData as Product, id: editingProduct.id } : p
         )
       );
@@ -117,7 +141,7 @@ export function Products() {
         ...formData as Product,
         id: Date.now().toString(),
       };
-      setProducts([...products, newProduct]);
+      setProducts([...filteredProducts, newProduct]);
     }
     
     closeModal();
@@ -125,7 +149,7 @@ export function Products() {
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this product?')) {
-      setProducts(products.filter((p) => p.id !== id));
+      setProducts(filteredProducts.filter((p) => p.id !== id));
     }
   };
 

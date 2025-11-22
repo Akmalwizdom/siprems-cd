@@ -1,25 +1,59 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Minus, Trash2, ShoppingCart, Loader2 } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, Loader2, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { Product, CartItem } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
+
+interface Transaction {
+  id: string;
+  date: string;
+  total_amount: number;
+  payment_method: string;
+  customer_segment: string;
+  items_count: number;
+}
+
+interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
 export function Transaction() {
+  const [activeTab, setActiveTab] = useState<'pos' | 'history'>('pos');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState<CartItem[]>([]);
+  
+  // Transaction History state
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchTransactions();
+    }
+  }, [activeTab, page]);
 
   const fetchProducts = async () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/products`);
       const data = await response.json();
-      setProducts(data.map((p: any) => ({
+      const productData = data.data || data;
+      setProducts(productData.map((p: any) => ({
         id: p.id.toString(),
         name: p.name,
         category: p.category,
@@ -33,6 +67,31 @@ export function Transaction() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTransactions = async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/transactions?page=${page}&limit=${limit}`);
+      const data: PaginatedResponse<Transaction> = await response.json();
+      setTransactions(data.data);
+      setTotalPages(data.total_pages);
+      setTotalItems(data.total);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const categoryFilters = useMemo(() => ['All', ...Array.from(new Set(products.map((p) => p.category)))], [products]);
@@ -87,6 +146,100 @@ export function Transaction() {
     setCart([]);
   };
 
+  return (
+    <div className="space-y-6">
+      {/* Header with Tabs */}
+      <div>
+        <h1 className="text-slate-900 mb-4">Transaction Management</h1>
+        <div className="flex gap-2 border-b border-slate-200">
+          <button
+            onClick={() => setActiveTab('pos')}
+            className={`px-6 py-3 font-medium transition-colors relative ${
+              activeTab === 'pos'
+                ? 'text-indigo-600 border-b-2 border-indigo-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4" />
+              Point of Sale
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`px-6 py-3 font-medium transition-colors relative ${
+              activeTab === 'history'
+                ? 'text-indigo-600 border-b-2 border-indigo-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4" />
+              Transaction History
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'pos' ? (
+        <POSView
+          products={products}
+          loading={loading}
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          cart={cart}
+          addToCart={addToCart}
+          updateQuantity={updateQuantity}
+          removeFromCart={removeFromCart}
+          subtotal={subtotal}
+          tax={tax}
+          total={total}
+          handleCheckout={handleCheckout}
+        />
+      ) : (
+        <HistoryView
+          transactions={transactions}
+          loading={historyLoading}
+          page={page}
+          setPage={setPage}
+          limit={limit}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          formatDate={formatDate}
+        />
+      )}
+    </div>
+  );
+}
+
+// POS View Component
+function POSView({
+  products,
+  loading,
+  searchTerm,
+  setSearchTerm,
+  selectedCategory,
+  setSelectedCategory,
+  cart,
+  addToCart,
+  updateQuantity,
+  removeFromCart,
+  subtotal,
+  tax,
+  total,
+  handleCheckout
+}: any) {
+  const categoryFilters = useMemo(() => ['All', ...Array.from(new Set(products.map((p: Product) => p.category)))], [products]);
+
+  const filteredProducts = products.filter((product: Product) => {
+    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -100,7 +253,6 @@ export function Transaction() {
       {/* Product Catalog */}
       <div className="lg:col-span-2 space-y-4">
         <div>
-          <h1 className="text-slate-900 mb-1">Point of Sale</h1>
           <p className="text-slate-500">Select products to create a transaction</p>
         </div>
 
@@ -239,6 +391,95 @@ export function Transaction() {
               Checkout
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// History View Component
+function HistoryView({
+  transactions,
+  loading,
+  page,
+  setPage,
+  limit,
+  totalPages,
+  totalItems,
+  formatDate
+}: any) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="px-6 py-4 text-left text-slate-700">Date</th>
+              <th className="px-6 py-4 text-left text-slate-700">Transaction ID</th>
+              <th className="px-6 py-4 text-left text-slate-700">Customer</th>
+              <th className="px-6 py-4 text-left text-slate-700">Payment</th>
+              <th className="px-6 py-4 text-left text-slate-700">Items</th>
+              <th className="px-6 py-4 text-left text-slate-700">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center">
+                  <div className="flex justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                  </div>
+                </td>
+              </tr>
+            ) : transactions.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                  No transactions found
+                </td>
+              </tr>
+            ) : (
+              transactions.map((t: Transaction) => (
+                <tr key={t.id} className="border-b border-slate-200 hover:bg-slate-50">
+                  <td className="px-6 py-4 text-slate-600">{formatDate(t.date)}</td>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{t.id.slice(0, 8)}...</td>
+                  <td className="px-6 py-4">
+                    <span className="px-2 py-1 bg-slate-100 rounded-md text-xs text-slate-600 border border-slate-200">
+                      {t.customer_segment || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-slate-600">{t.payment_method || 'Cash'}</td>
+                  <td className="px-6 py-4 text-slate-600">{t.items_count}</td>
+                  <td className="px-6 py-4 font-medium text-slate-900">${t.total_amount.toFixed(2)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+        <span className="text-sm text-slate-500">
+          Showing {transactions.length > 0 ? (page - 1) * limit + 1 : 0} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPage((p: number) => Math.max(1, p - 1))}
+            disabled={page === 1 || loading}
+            className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4 text-slate-600" />
+          </button>
+          <span className="text-sm text-slate-600">
+            Page {page} of {totalPages || 1}
+          </span>
+          <button
+            onClick={() => setPage((p: number) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages || loading}
+            className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronRight className="w-4 h-4 text-slate-600" />
+          </button>
         </div>
       </div>
     </div>
