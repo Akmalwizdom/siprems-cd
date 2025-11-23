@@ -1,32 +1,52 @@
-import { useState } from 'react';
-import { Sparkles, Loader2, TrendingUp, AlertTriangle, MessageSquare, Send, ChevronRight, Calendar } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import React, { useState } from 'react';
+import { Sparkles, Loader2, TrendingUp, AlertTriangle, MessageSquare, Send, ChevronRight, Calendar, Package, TrendingDown, CheckCircle, Clock } from 'lucide-react';
+import { LineChart, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ComposedChart } from 'recharts';
 import { useStore } from '../context/StoreContext';
 import { apiService, type PredictionResponse } from '../services/api';
+import { geminiService, type ChatMessage, type CommandAction } from '../services/gemini';
 import { PredictionData, RestockRecommendation } from '../types';
+import { Button } from '../components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 
 type PredictionState = 'idle' | 'loading' | 'result' | 'learning' | 'error';
+type PredictionRange = 7 | 30 | 90;
 
 export function SmartPrediction() {
   const { events } = useStore();
   const [state, setState] = useState<PredictionState>('idle');
-  const [showChatbot, setShowChatbot] = useState(false);
+  const [predictionRange, setPredictionRange] = useState<PredictionRange>(30);
   const [predictionData, setPredictionData] = useState<PredictionData[]>([]);
   const [restockRecommendations, setRestockRecommendations] = useState<RestockRecommendation[]>([]);
   const [predictionMeta, setPredictionMeta] = useState<PredictionResponse['meta'] | null>(null);
   const [eventAnnotations, setEventAnnotations] = useState<PredictionResponse['eventAnnotations']>([]);
   const [error, setError] = useState<string>('');
-  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([
+  const [restockingProduct, setRestockingProduct] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
       content: 'I\'m your AI assistant. Click "Start Prediction" to generate stock forecasts based on your calendar events and sales history.',
     },
   ]);
   const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<CommandAction | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  const handleStartPrediction = async () => {
+  const handleStartPrediction = async (days?: PredictionRange | React.MouseEvent) => {
     setState('loading');
     setError('');
+    
+    // Handle case where event object is accidentally passed
+    const daysToUse = (typeof days === 'number' ? days : predictionRange);
 
     try {
       // Convert StoreContext events to API format
@@ -44,8 +64,8 @@ export function SmartPrediction() {
         impact: event.impact ?? impactDefaults[event.type] ?? 0.3,
       }));
 
-      // Call the API
-      const response = await apiService.getPrediction('store_1', apiEvents);
+      // Call the API with days parameter
+      const response = await apiService.getPrediction('store_1', apiEvents, undefined, daysToUse);
 
       if (response.status === 'success') {
         setPredictionData(response.chartData);
@@ -78,18 +98,52 @@ export function SmartPrediction() {
     }
   };
 
-  const handleSendMessage = () => {
-    if (!chatInput.trim()) return;
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || isChatLoading) return;
 
-    setChatMessages([
-      ...chatMessages,
-      { role: 'user', content: chatInput },
-      {
-        role: 'assistant',
-        content: 'Based on your query, I recommend focusing on restocking Coffee Mugs and Desk Lamps as they show the highest predicted demand. Would you like specific quantity recommendations?',
-      },
-    ]);
+    const userMessage = chatInput;
     setChatInput('');
+    setIsChatLoading(true);
+
+    const updatedMessages: ChatMessage[] = [
+      ...chatMessages,
+      { role: 'user', content: userMessage },
+    ];
+    setChatMessages(updatedMessages);
+
+    try {
+      const fullPredictionData: PredictionResponse | null = predictionData.length > 0 ? {
+        status: 'success',
+        chartData: predictionData,
+        recommendations: restockRecommendations,
+        eventAnnotations,
+        meta: predictionMeta!,
+      } : null;
+
+      const { response, action } = await geminiService.chat(
+        userMessage,
+        fullPredictionData,
+        updatedMessages
+      );
+
+      setChatMessages([
+        ...updatedMessages,
+        { role: 'assistant', content: response },
+      ]);
+
+      if (action.type !== 'none' && action.needsConfirmation) {
+        setPendingAction(action);
+        setShowConfirmDialog(true);
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
+      setChatMessages([
+        ...updatedMessages,
+        { role: 'assistant', content: 'Sorry, I encountered an error processing your request.' },
+      ]);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
   const getUrgencyColor = (urgency: string) => {
@@ -98,6 +152,140 @@ export function SmartPrediction() {
       medium: 'text-yellow-600 bg-yellow-50 border-yellow-200',
       low: 'text-green-600 bg-green-50 border-green-200',
     }[urgency] || 'text-slate-600 bg-slate-50 border-slate-200';
+  };
+
+  const getEventCategoryColor = (type: string) => {
+    const colors: Record<string, string> = {
+      promotion: '#10b981', // green
+      holiday: '#ef4444', // red
+      event: '#f59e0b', // amber
+      'store-closed': '#6b7280', // gray
+    };
+    return colors[type] || '#94a3b8'; // slate
+  };
+
+  const getEventCategoryBadgeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      promotion: 'bg-green-100 text-green-700 border-green-300',
+      holiday: 'bg-red-100 text-red-700 border-red-300',
+      event: 'bg-amber-100 text-amber-700 border-amber-300',
+      'store-closed': 'bg-gray-100 text-gray-700 border-gray-300',
+    };
+    return colors[type] || 'bg-slate-100 text-slate-700 border-slate-300';
+  };
+
+  const handleRangeChange = async (days: PredictionRange) => {
+    setPredictionRange(days);
+    if (state === 'result') {
+      await handleStartPrediction(days);
+    }
+  };
+
+  const handleRestock = async (productId: string, quantity: number) => {
+    setRestockingProduct(productId);
+    try {
+      await apiService.restockProduct(productId, quantity);
+      
+      // Update recommendations to reflect new stock
+      setRestockRecommendations(prev =>
+        prev.map(item =>
+          item.productId === productId
+            ? { ...item, currentStock: item.currentStock + quantity }
+            : item
+        )
+      );
+      
+      // Update chat with success message
+      setChatMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Successfully restocked ${quantity} units. Stock updated for ${restockRecommendations.find(r => r.productId === productId)?.productName || 'product'}.`,
+        },
+      ]);
+    } catch (error) {
+      console.error('Restock error:', error);
+      setChatMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Failed to restock. Please try again or contact support.`,
+        },
+      ]);
+    } finally {
+      setRestockingProduct(null);
+    }
+  };
+
+  const handleQuickPrompt = (prompt: string, answer: string) => {
+    setChatMessages(prev => [
+      ...prev,
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: answer },
+    ]);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!pendingAction) return;
+
+    setShowConfirmDialog(false);
+
+    try {
+      switch (pendingAction.type) {
+        case 'restock':
+          if (pendingAction.productId && pendingAction.quantity) {
+            await handleRestock(pendingAction.productId, pendingAction.quantity);
+            setChatMessages(prev => [
+              ...prev,
+              {
+                role: 'assistant',
+                content: `Successfully restocked ${pendingAction.quantity} units of ${pendingAction.productName}.`,
+              },
+            ]);
+          }
+          break;
+        case 'update_stock':
+          if (pendingAction.productName && pendingAction.quantity) {
+            const product = restockRecommendations.find(r => 
+              r.productName.toLowerCase().includes(pendingAction.productName!.toLowerCase())
+            );
+            if (product) {
+              await apiService.updateStock(product.productId, pendingAction.quantity);
+              setChatMessages(prev => [
+                ...prev,
+                {
+                  role: 'assistant',
+                  content: `Stock updated to ${pendingAction.quantity} units for ${product.productName}.`,
+                },
+              ]);
+            }
+          }
+          break;
+      }
+    } catch (error) {
+      console.error('Action error:', error);
+      setChatMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Failed to execute action. Please try again.',
+        },
+      ]);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleCancelAction = () => {
+    setShowConfirmDialog(false);
+    setPendingAction(null);
+    setChatMessages(prev => [
+      ...prev,
+      {
+        role: 'assistant',
+        content: 'Action cancelled.',
+      },
+    ]);
   };
 
   // Error State
@@ -109,13 +297,17 @@ export function SmartPrediction() {
         </div>
         <h1 className="text-slate-900 mb-4">Prediction Error</h1>
         <p className="text-red-600 mb-8 max-w-lg mx-auto">{error}</p>
-        <button
-          onClick={() => setState('idle')}
-          className="inline-flex items-center gap-3 bg-indigo-600 text-white px-8 py-4 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg hover:shadow-xl"
+        <Button
+          onClick={() => {
+            setError('');
+            setState('idle');
+          }}
+          size="lg"
+          className="shadow-lg hover:shadow-xl"
         >
           <Sparkles className="w-5 h-5" />
           Try Again
-        </button>
+        </Button>
       </div>
     );
   }
@@ -131,13 +323,14 @@ export function SmartPrediction() {
         <p className="text-slate-600 mb-8 max-w-lg mx-auto">
           Our AI analyzes your sales history, seasonal trends, and upcoming holidays to predict demand and recommend optimal stock levels.
         </p>
-        <button
-          onClick={handleStartPrediction}
-          className="inline-flex items-center gap-3 bg-indigo-600 text-white px-8 py-4 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg hover:shadow-xl"
+        <Button
+          onClick={() => handleStartPrediction()}
+          size="lg"
+          className="shadow-lg hover:shadow-xl"
         >
           <Sparkles className="w-5 h-5" />
           Start Prediction
-        </button>
+        </Button>
         <div className="mt-12 grid grid-cols-3 gap-4 text-left">
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <TrendingUp className="w-8 h-8 text-indigo-600 mb-3" />
@@ -221,114 +414,177 @@ export function SmartPrediction() {
   // Result State
   return (
     <div className="space-y-6">
+      {/* Header with Range Selector */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-slate-900 mb-1">AI Prediction Results</h1>
-          <p className="text-slate-500">12-week forecast generated on {new Date().toLocaleDateString()}</p>
+          <p className="text-slate-500">Forecast generated on {new Date().toLocaleDateString()}</p>
         </div>
-        <button
-          onClick={() => setState('idle')}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-        >
-          <Sparkles className="w-4 h-4" />
-          Run New Prediction
-        </button>
+        <div className="flex gap-2">
+          {([7, 30, 90] as PredictionRange[]).map((days) => (
+            <Button
+              key={days}
+              onClick={() => handleRangeChange(days)}
+              variant={predictionRange === days ? 'default' : 'outline'}
+              className={predictionRange === days ? '' : 'text-slate-600'}
+            >
+              {days} days
+            </Button>
+          ))}
+        </div>
       </div>
+
+      {/* Prediction Summary Cards - Metric Cards */}
+      {predictionMeta && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="bg-white rounded-xl p-6 border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+                <CheckCircle className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                {predictionMeta.accuracy ? `${predictionMeta.accuracy}%` : 'N/A'}
+              </span>
+            </div>
+            <h3 className="text-slate-500 mb-1">Forecast Accuracy</h3>
+            <p className="text-slate-900">{predictionMeta.accuracy ? `${predictionMeta.accuracy}%` : 'N/A'}</p>
+            <p className="text-xs text-slate-400 mt-2">Model performance</p>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-white" />
+              </div>
+              <span className={`${((predictionMeta.applied_factor - 1) * 100) >= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'} px-3 py-1 rounded-full`}>
+                {((predictionMeta.applied_factor - 1) * 100) >= 0 ? '+' : ''}{((predictionMeta.applied_factor - 1) * 100).toFixed(1)}%
+              </span>
+            </div>
+            <h3 className="text-slate-500 mb-1">Growth Factor</h3>
+            <p className="text-slate-900">{((predictionMeta.applied_factor - 1) * 100).toFixed(1)}%</p>
+            <p className="text-xs text-slate-400 mt-2">vs last period</p>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg">
+                <AlertTriangle className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-red-600 bg-red-50 px-3 py-1 rounded-full">
+                {restockRecommendations.filter(r => r.urgency === 'high').length}
+              </span>
+            </div>
+            <h3 className="text-slate-500 mb-1">High-Risk Items</h3>
+            <p className="text-slate-900">{restockRecommendations.filter(r => r.urgency === 'high').length}</p>
+            <p className="text-xs text-slate-400 mt-2">Need immediate restock</p>
+          </div>
+
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
         {/* Main Area (70%) */}
         <div className="lg:col-span-7 space-y-6">
-          {predictionMeta && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white rounded-xl p-4 border border-slate-200">
-                <p className="text-slate-500 text-sm">Historical Window</p>
-                <p className="text-slate-900 text-lg font-semibold">{predictionMeta.historicalDays} days</p>
-                <p className="text-xs text-slate-500">Last date: {predictionMeta.lastHistoricalDate}</p>
-              </div>
-              <div className="bg-white rounded-xl p-4 border border-slate-200">
-                <p className="text-slate-500 text-sm">Forecast Horizon</p>
-                <p className="text-slate-900 text-lg font-semibold">{predictionMeta.forecastDays} days</p>
-                <p className="text-xs text-slate-500">Growth factor {predictionMeta.applied_factor?.toFixed(2)}</p>
-              </div>
-              <div className="bg-white rounded-xl p-4 border border-slate-200">
-                <p className="text-slate-500 text-sm">Regressors</p>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {(predictionMeta.regressors || []).map((reg) => (
-                    <span key={reg} className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">
-                      {reg}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Forecast Chart */}
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="mb-6">
               <h2 className="text-slate-900 mb-1">Sales Forecast</h2>
-              <p className="text-slate-500">Historical data vs AI predictions with holiday markers</p>
+              <p className="text-slate-500">Historical data vs AI predictions with event markers</p>
             </div>
             <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={predictionData}>
+              <ComposedChart data={predictionData}>
+                <defs>
+                  <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.05}/>
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="#64748b" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis stroke="#64748b" tick={{ fontSize: 12 }} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#fff',
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
+                    padding: '12px',
                   }}
                 />
-                <Legend />
+                <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                
+                {/* Historical Line */}
                 <Line
                   type="monotone"
                   dataKey="historical"
                   stroke="#64748b"
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                   name="Historical Sales"
-                  dot={{ fill: '#64748b', r: 4 }}
+                  dot={false}
+                  connectNulls={false}
                 />
-                <Line
+                
+                {/* Predicted Area */}
+                <Area
                   type="monotone"
                   dataKey="predicted"
                   stroke="#4f46e5"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
+                  strokeWidth={2.5}
+                  fill="url(#colorPredicted)"
                   name="AI Prediction"
-                  dot={{ fill: '#4f46e5', r: 4 }}
+                  dot={false}
+                  connectNulls={true}
                 />
-                {predictionData && predictionData
-                  .filter((d) => d.isHoliday)
-                  .map((holiday, idx) => (
+                
+                {/* Event Markers with Colors by Category */}
+                {eventAnnotations.map((event, idx) => {
+                  const mainType = event.types[0] || 'event';
+                  return (
                     <ReferenceLine
                       key={idx}
-                      x={holiday.date}
-                      stroke="#ef4444"
+                      x={event.date}
+                      stroke={getEventCategoryColor(mainType)}
+                      strokeWidth={2}
                       strokeDasharray="3 3"
                       label={{
-                        value: holiday.holidayName || 'Event',
+                        value: event.titles[0] || 'Event',
                         position: 'top',
-                        fill: '#ef4444',
-                        fontSize: 12,
+                        fill: getEventCategoryColor(mainType),
+                        fontSize: 11,
+                        fontWeight: 600,
                       }}
                     />
-                  ))}
-              </LineChart>
+                  );
+                })}
+              </ComposedChart>
             </ResponsiveContainer>
-            <div className="mt-4 flex items-center gap-4 text-sm">
+            <div className="mt-6 flex flex-wrap items-center gap-6 text-sm">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-slate-600 rounded-full"></div>
-                <span className="text-slate-600">Historical</span>
+                <div className="w-4 h-0.5 bg-slate-600"></div>
+                <span className="text-slate-600 font-medium">Historical</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-indigo-600 rounded-full"></div>
-                <span className="text-slate-600">Predicted</span>
+                <div className="w-4 h-3 bg-indigo-600 opacity-40 rounded-sm"></div>
+                <span className="text-slate-600 font-medium">Predicted</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-0.5 bg-red-500"></div>
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span className="text-slate-600">Promotion</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                 <span className="text-slate-600">Holiday</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                <span className="text-slate-600">Event</span>
               </div>
             </div>
           </div>
@@ -343,28 +599,51 @@ export function SmartPrediction() {
               {restockRecommendations.map((item) => (
                 <div
                   key={item.productId}
-                  className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200"
+                  className="flex items-center justify-between p-5 bg-slate-50 rounded-xl border border-slate-200 hover:border-indigo-200 transition-colors"
                 >
                   <div className="flex-1">
-                    <h3 className="text-slate-900 mb-1">{item.productName}</h3>
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-slate-900 font-semibold">{item.productName}</h3>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full border text-xs font-medium ${getUrgencyColor(item.urgency)}`}
+                      >
+                        {item.urgency.toUpperCase()}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-4 text-sm text-slate-600 flex-wrap">
                       {item.category && (
-                        <span className="text-xs px-2 py-1 bg-white border border-slate-200 rounded-full">
+                        <span className="text-xs px-2.5 py-1 bg-white border border-slate-200 rounded-full font-medium">
                           {item.category}
                         </span>
                       )}
-                      <span>Current: {item.currentStock}</span>
-                      <span>Predicted: {item.predictedDemand}</span>
-                      <span className="text-indigo-600">
-                        Restock: +{item.recommendedRestock}
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium">Current:</span> {item.currentStock}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium">Predicted:</span> {item.predictedDemand}
+                      </span>
+                      <span className="text-indigo-600 font-semibold flex items-center gap-1">
+                        <span className="font-medium">Restock:</span> +{item.recommendedRestock}
                       </span>
                     </div>
                   </div>
-                  <span
-                    className={`px-3 py-1 rounded-full border ${getUrgencyColor(item.urgency)}`}
+                  <Button
+                    onClick={() => handleRestock(item.productId, item.recommendedRestock)}
+                    disabled={restockingProduct === item.productId}
+                    className="ml-4"
                   >
-                    {item.urgency.toUpperCase()}
-                  </span>
+                    {restockingProduct === item.productId ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Package className="w-4 h-4" />
+                        Restock Now
+                      </>
+                    )}
+                  </Button>
                 </div>
               ))}
             </div>
@@ -372,24 +651,40 @@ export function SmartPrediction() {
 
           {eventAnnotations.length > 0 && (
             <div className="bg-white rounded-xl p-6 border border-slate-200">
-              <div className="mb-4">
+              <div className="mb-6">
                 <h2 className="text-slate-900 mb-1">Event Timeline</h2>
-                <p className="text-slate-500 text-sm">Prophet considers these promotions & holidays</p>
+                <p className="text-slate-500">AI considers these promotions, holidays & events in predictions</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {eventAnnotations.slice(0, 6).map((event) => (
-                  <div key={event.date} className="p-4 rounded-lg border border-slate-200 bg-slate-50">
-                    <p className="text-slate-900 font-medium">{event.date}</p>
-                    <p className="text-sm text-slate-600">{event.titles.join(', ')}</p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {event.types.map((type) => (
-                        <span key={type} className="text-xs px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-600">
-                          {type}
-                        </span>
-                      ))}
+                {eventAnnotations.slice(0, 6).map((event) => {
+                  const mainType = event.types[0] || 'event';
+                  return (
+                    <div 
+                      key={event.date} 
+                      className="p-4 rounded-xl border-2 bg-gradient-to-br from-white to-slate-50 hover:shadow-md transition-shadow"
+                      style={{ borderColor: getEventCategoryColor(mainType) + '40' }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-slate-900 font-semibold">{event.date}</p>
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: getEventCategoryColor(mainType) }}
+                        />
+                      </div>
+                      <p className="text-sm text-slate-700 font-medium mb-3">{event.titles.join(', ')}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {event.types.map((type) => (
+                          <span 
+                            key={type} 
+                            className={`text-xs px-2.5 py-1 rounded-full border font-medium ${getEventCategoryBadgeColor(type)}`}
+                          >
+                            {type}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -398,35 +693,96 @@ export function SmartPrediction() {
         {/* Support Area (30%) - Smart Insight Panel */}
         <div className="lg:col-span-3">
           <div className="bg-white rounded-xl border border-slate-200 sticky top-24">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-slate-900">Smart Insights</h3>
-              </div>
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-slate-900 mb-1">Smart Insights</h2>
+              <p className="text-slate-500">Ask questions about your forecast</p>
             </div>
 
-            <div className="p-4 max-h-96 overflow-y-auto space-y-4">
+            <div className="p-6 max-h-96 overflow-y-auto space-y-3">
               {chatMessages.map((message, idx) => (
                 <div
                   key={idx}
                   className={`${
                     message.role === 'assistant'
-                      ? 'bg-indigo-50 text-slate-900'
-                      : 'bg-slate-100 text-slate-900 ml-8'
-                  } p-3 rounded-lg`}
+                      ? 'bg-indigo-50 text-slate-900 border border-indigo-200'
+                      : 'bg-slate-100 text-slate-900 ml-8 border border-slate-200'
+                  } p-4 rounded-lg`}
                 >
                   {message.role === 'assistant' && (
                     <div className="flex items-center gap-2 mb-2">
                       <Sparkles className="w-4 h-4 text-indigo-600" />
-                      <span className="text-xs text-indigo-600">AI Assistant</span>
+                      <span className="text-xs text-indigo-600 font-semibold">AI Assistant</span>
                     </div>
                   )}
-                  <p className="text-sm">{message.content}</p>
+                  <p className="text-sm leading-relaxed">{message.content}</p>
                 </div>
               ))}
             </div>
 
-            <div className="p-4 border-t border-slate-200">
+            <div className="p-6 border-t border-slate-200">
+              {/* Quick Prompts */}
+              <div className="mb-4">
+                <p className="text-sm text-slate-600 font-medium mb-3">Quick Questions</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => {
+                      const highRiskItems = restockRecommendations
+                        .filter(r => r.urgency === 'high')
+                        .map(r => r.productName)
+                        .join(', ');
+                      handleQuickPrompt(
+                        'Which items need restock?',
+                        highRiskItems 
+                          ? `High priority items needing restock: ${highRiskItems}. These products are predicted to face stock shortages based on upcoming demand.`
+                          : 'All items have adequate stock levels for the forecast period.'
+                      );
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-full border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                  >
+                    Which items need restock? <ChevronRight className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      const nextEvents = eventAnnotations.slice(0, 2);
+                      const eventInfo = nextEvents.length > 0
+                        ? nextEvents.map(e => `${e.titles.join(', ')} on ${e.date} (${e.types.join(', ')})`).join(' and ')
+                        : 'No major events';
+                      handleQuickPrompt(
+                        'Why is demand increasing next week?',
+                        nextEvents.length > 0
+                          ? `Demand is expected to increase due to upcoming events: ${eventInfo}. Historical patterns show sales typically rise ${Math.round(((predictionMeta?.applied_factor || 1) - 1) * 100)}% during similar periods.`
+                          : `Demand follows normal seasonal patterns. The forecast shows a ${Math.round(((predictionMeta?.applied_factor || 1) - 1) * 100)}% change based on historical trends.`
+                      );
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-full border-purple-200 text-purple-700 hover:bg-purple-50"
+                  >
+                    Why is demand increasing? <ChevronRight className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      const topRecommendations = restockRecommendations.slice(0, 3);
+                      const summary = topRecommendations
+                        .map(r => `${r.productName}: +${r.recommendedRestock} units (${r.urgency} priority)`)
+                        .join('; ');
+                      handleQuickPrompt(
+                        'What are my top priorities?',
+                        `Top 3 priorities: ${summary}. Focus on high urgency items first to prevent stockouts.`
+                      );
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-full border-green-200 text-green-700 hover:bg-green-50"
+                  >
+                    Top priorities <ChevronRight className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Chat Input */}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -434,39 +790,58 @@ export function SmartPrediction() {
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Ask about predictions..."
-                  className="flex-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-sm"
                 />
-                <button
+                <Button
                   onClick={handleSendMessage}
-                  className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  size="icon"
+                  disabled={isChatLoading}
                 >
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  onClick={() => {
-                    setChatInput('Why is there a spike in Week 6?');
-                    setTimeout(handleSendMessage, 100);
-                  }}
-                  className="text-xs px-3 py-1 bg-slate-100 text-slate-700 rounded-full hover:bg-slate-200 transition-colors"
-                >
-                  Why the spike? <ChevronRight className="w-3 h-3 inline" />
-                </button>
-                <button
-                  onClick={() => {
-                    setChatInput('Show me top 3 priorities');
-                    setTimeout(handleSendMessage, 100);
-                  }}
-                  className="text-xs px-3 py-1 bg-slate-100 text-slate-700 rounded-full hover:bg-slate-200 transition-colors"
-                >
-                  Top priorities <ChevronRight className="w-3 h-3 inline" />
-                </button>
+                  {isChatLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
+                </Button>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Action</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAction?.type === 'restock' && (
+                <>
+                  Are you sure you want to restock <strong>{pendingAction.productName}</strong> with <strong>{pendingAction.quantity}</strong> units?
+                </>
+              )}
+              {pendingAction?.type === 'update_stock' && (
+                <>
+                  Are you sure you want to update the stock of <strong>{pendingAction.productName}</strong> to <strong>{pendingAction.quantity}</strong> units?
+                </>
+              )}
+              {pendingAction?.type === 'add_product' && (
+                <>
+                  Are you sure you want to add product <strong>{pendingAction.productName}</strong>?
+                </>
+              )}
+              {pendingAction?.type === 'delete_product' && (
+                <>
+                  Are you sure you want to delete product <strong>{pendingAction.productName}</strong>? This action cannot be undone.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelAction}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmAction}>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

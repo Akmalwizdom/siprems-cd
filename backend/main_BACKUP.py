@@ -1,17 +1,4 @@
-"""
-SIPREMS Backend API - FIXED VERSION
-Fixes applied:
-- Bug 1: Fixed add_product ID retrieval
-- Bug 2: Added forecast days validation (1-365)
-- Bug 3: Added empty forecast check
-- Bug 4: Added file locking for model training
-- Bug 5: N/A (seed_smart.py issue)
-- Bug 6: Simplified date parsing in build_event_lookup
-- Bug 7: Added GEMINI_API_KEY validation
-- Bug 8: Fixed urgency calculation logic
-"""
-
-from collections import defaultdict
+﻿from collections import defaultdict
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import create_engine, text
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,22 +7,12 @@ import numpy as np
 import os
 import json
 import re
-import fcntl
-import logging
-import google.generativeai as genai
+import requests
 from datetime import datetime, timedelta, date
 from prophet import Prophet
 from prophet.serialize import model_to_json, model_from_json
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -51,14 +28,8 @@ engine = create_engine(DATABASE_URL)
 MODEL_DIR = "/app/models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-# FIXED: Bug 7 - Validate GEMINI_API_KEY
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-
-if not GEMINI_API_KEY:
-    logger.warning("WARNING: GEMINI_API_KEY not set. AI chat features will be disabled.")
-else:
-    # Configure Gemini API
-    genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
 
 REGRESSOR_COLUMNS = [
     "is_weekend",
@@ -87,8 +58,6 @@ CATEGORY_COLOR_MAP = {
 }
 
 FORECAST_HORIZON_DAYS = 84
-MIN_FORECAST_DAYS = 1
-MAX_FORECAST_DAYS = 365  # FIXED: Bug 2 - Added max limit
 
 def calculate_forecast_accuracy(historical_df: pd.DataFrame, model: Prophet) -> float:
     """Calculate prediction accuracy using MAPE on last 14 days of historical data"""
@@ -121,7 +90,7 @@ def calculate_forecast_accuracy(historical_df: pd.DataFrame, model: Prophet) -> 
         accuracy = max(0, min(100, 100 - mape))
         return round(accuracy, 1)
     except Exception as e:
-        logger.error(f"Accuracy calculation error: {e}")
+        print(f"Accuracy calculation error: {e}")
         return 0.0
 
 
@@ -136,17 +105,21 @@ def fetch_daily_sales_frame() -> pd.DataFrame:
     try:
         df = pd.read_sql(query, engine, parse_dates=["ds"])
     except Exception as e:
-        logger.error(f"fetch_daily_sales_frame read error: {e}")
+        # If table missing or query fails, return empty df with required columns
+        print(f"fetch_daily_sales_frame read error: {e}")
         cols = ["ds", "y", "transactions_count", "items_sold", "avg_ticket"] + REGRESSOR_COLUMNS
         return pd.DataFrame(columns=cols)
 
     if df.empty:
+        # return empty with columns to avoid KeyErrors downstream
         cols = ["ds", "y", "transactions_count", "items_sold", "avg_ticket"] + REGRESSOR_COLUMNS
         return pd.DataFrame(columns=cols)
 
+    # Ensure ds is datetime
     if not pd.api.types.is_datetime64_any_dtype(df["ds"]):
         df["ds"] = pd.to_datetime(df["ds"])
 
+    # Ensure numeric columns exist and fillna
     required_numeric = {"y", "transactions_count", "items_sold", "avg_ticket", *REGRESSOR_COLUMNS}
     for col in required_numeric:
         if col not in df.columns:
@@ -157,15 +130,17 @@ def fetch_daily_sales_frame() -> pd.DataFrame:
 
 
 def load_calendar_events_df() -> pd.DataFrame:
+    # Read everything then normalize columns to be tolerant of schema differences
     try:
         df = pd.read_sql("SELECT * FROM calendar_events ORDER BY date", engine, parse_dates=["date"])
     except Exception as e:
-        logger.error(f"load_calendar_events_df error: {e}")
+        print(f"load_calendar_events_df error: {e}")
         return pd.DataFrame(columns=["date", "title", "type", "impact_weight", "category", "description"])
 
     if df.empty:
         return pd.DataFrame(columns=["date", "title", "type", "impact_weight", "category", "description"])
 
+    # Normalize missing columns
     for c in ["date", "title", "type", "impact_weight", "category", "description"]:
         if c not in df.columns:
             df[c] = "" if c in ("title", "type", "category", "description") else 0.0
@@ -175,7 +150,6 @@ def load_calendar_events_df() -> pd.DataFrame:
     return df[["date", "title", "type", "impact_weight", "category", "description"]]
 
 
-# FIXED: Bug 6 - Simplified date parsing
 def build_event_lookup(db_events_df: pd.DataFrame, request_event_dicts: Optional[List[Dict]] = None):
     event_lookup = defaultdict(lambda: {
         "titles": set(),
@@ -187,40 +161,35 @@ def build_event_lookup(db_events_df: pd.DataFrame, request_event_dicts: Optional
     })
 
     def ingest_event(row):
-        # Normalize row to dict
+        raw_date = row.get("date") if isinstance(row, dict) else row.get("date", None) if isinstance(row, dict) else None
+        # row may be pandas Series or dict — handle both
         if isinstance(row, pd.Series):
-            row_dict = row.to_dict()
+            raw_date = row.get("date")
+            title = row.get("title", "")
+            event_type = row.get("type", None)
+            impact_val = row.get("impact_weight", None)
         else:
-            row_dict = dict(row) if hasattr(row, 'keys') else row
-        
-        raw_date = row_dict.get("date")
+            title = row.get("title") or ""
+            event_type = row.get("type", None)
+            impact_val = row.get("impact_weight", None)
+
         if pd.isna(raw_date) or raw_date is None or raw_date == "":
             return
-        
-        # Unified date parsing
-        try:
-            if isinstance(raw_date, (pd.Timestamp, datetime)):
-                date_key = raw_date.date()
-            elif isinstance(raw_date, date):
-                date_key = raw_date
-            else:
-                date_key = pd.to_datetime(raw_date).date()
-        except Exception as e:
-            logger.warning(f"Invalid date format: {raw_date}, error: {e}")
-            return
-        
+
+        if isinstance(raw_date, (pd.Timestamp, datetime)):
+            date_key = pd.to_datetime(raw_date).date()
+        elif isinstance(raw_date, date):
+            date_key = raw_date
+        else:
+            date_key = pd.to_datetime(raw_date).date()
+
         info = event_lookup[date_key]
-        title = row_dict.get("title", "")
-        event_type = row_dict.get("type")
-        impact_val = row_dict.get("impact_weight")
-        
         if title:
             info["titles"].add(title)
         if event_type:
             info["types"].add(event_type)
-        
+
         impact = float(impact_val) if (impact_val is not None and impact_val != "") else DEFAULT_EVENT_IMPACT.get(event_type, 0.3)
-        
         if event_type == "promotion":
             info["promo_intensity"] += impact
         elif event_type == "holiday":
@@ -231,6 +200,7 @@ def build_event_lookup(db_events_df: pd.DataFrame, request_event_dicts: Optional
             info["closure_intensity"] += impact
 
     if db_events_df is not None and not db_events_df.empty:
+        # iterate rows as Series
         for _, row in db_events_df.iterrows():
             ingest_event(row)
 
@@ -242,11 +212,13 @@ def build_event_lookup(db_events_df: pd.DataFrame, request_event_dicts: Optional
 
 
 def apply_future_regressors(future_df: pd.DataFrame, historical_df: pd.DataFrame, event_lookup):
+    # Ensure ds is datetime in both frames
     future_df["ds"] = pd.to_datetime(future_df["ds"])
     if not historical_df.empty:
         historical_df["ds"] = pd.to_datetime(historical_df["ds"])
 
     merge_cols = ["ds"] + [col for col in REGRESSOR_COLUMNS if col in historical_df.columns]
+    # If historical_df empty, create empty cols to avoid KeyError
     for col in merge_cols:
         if col not in historical_df.columns and col != "ds":
             historical_df[col] = np.nan
@@ -261,6 +233,7 @@ def apply_future_regressors(future_df: pd.DataFrame, historical_df: pd.DataFrame
     txn_default = historical_df["transactions_count"].mean() if ("transactions_count" in historical_df.columns and not historical_df["transactions_count"].isna().all()) else 1.0
     ticket_default = historical_df["avg_ticket"].mean() if ("avg_ticket" in historical_df.columns and not historical_df["avg_ticket"].isna().all()) else 1.0
 
+    # Compute weekday averages defensively
     if not historical_df.empty and "transactions_count" in historical_df.columns:
         weekday_txn_avg = historical_df.groupby(historical_df["ds"].dt.weekday)["transactions_count"].mean().to_dict()
     else:
@@ -289,6 +262,7 @@ def apply_future_regressors(future_df: pd.DataFrame, historical_df: pd.DataFrame
     future["transactions_count"] = fill_with_weekday_average("transactions_count", weekday_txn_avg, txn_default)
     future["avg_ticket"] = fill_with_weekday_average("avg_ticket", weekday_ticket_avg, ticket_default)
 
+    # Ensure all regressors are numeric
     for col in REGRESSOR_COLUMNS:
         future[col] = pd.to_numeric(future[col].fillna(0), errors="coerce").fillna(0)
 
@@ -300,16 +274,10 @@ class CalendarEventInput(BaseModel):
     title: Optional[str] = None
     impact: Optional[float] = None
 
-# FIXED: Bug 2 - Added validation constraints
 class PredictionRequest(BaseModel):
     events: List[CalendarEventInput] = Field(default_factory=list)
     store_config: dict = Field(default_factory=lambda: {"CompetitionDistance": 500})
-    days: Optional[int] = Field(
-        default=84, 
-        ge=1, 
-        le=365, 
-        description="Number of days to forecast (1-365)"
-    )
+    days: Optional[int] = Field(default=84, description="Number of days to forecast")
 
 def normalize_request_events(events: List[CalendarEventInput]) -> List[Dict]:
     normalized = []
@@ -357,7 +325,7 @@ def get_dashboard_metrics():
                 FROM current, previous
             """)).mappings().first()
         except Exception as e:
-            logger.error(f"get_dashboard_metrics error: {e}")
+            print(f"get_dashboard_metrics error: {e}")
             return {
                 "totalRevenue": 0.0,
                 "totalTransactions": 0,
@@ -403,7 +371,7 @@ def get_sales_chart():
         df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
         return df.to_dict(orient="records")
     except Exception as e:
-        logger.error(f"get_sales_chart error: {e}")
+        print(f"get_sales_chart error: {e}")
         return []
 
 @app.get("/api/dashboard/category-sales")
@@ -418,7 +386,7 @@ def get_category_sales():
     try:
         df = pd.read_sql(query, engine)
     except Exception as e:
-        logger.error(f"get_category_sales error: {e}")
+        print(f"get_category_sales error: {e}")
         return []
 
     results = []
@@ -438,7 +406,7 @@ def get_product_categories():
         try:
             result = conn.execute(text(query)).scalars().all()
         except Exception as e:
-            logger.error(f"get_product_categories error: {e}")
+            print(f"get_product_categories error: {e}")
             return {"categories": []}
     return {"categories": list(result)}
 
@@ -508,7 +476,7 @@ def get_products(
             total = conn.execute(text(count_query), params).scalar()
             result = conn.execute(text(data_query), params).mappings().all()
     except Exception as e:
-        logger.error(f"get_products error: {e}")
+        print(f"get_products error: {e}")
         return {"data": [], "total":0, "page": page, "limit": limit, "total_pages": 0}
 
     return {
@@ -554,7 +522,7 @@ def get_transactions(
                 t['created_at'] = t['created_at'].isoformat() if t['created_at'] else None
                 transactions.append(t)
     except Exception as e:
-        logger.error(f"get_transactions error: {e}")
+        print(f"get_transactions error: {e}")
         return {"data": [], "total": 0, "page": page, "limit": limit, "total_pages": 0}
 
     return {
@@ -570,12 +538,13 @@ def get_calendar_events():
     try:
         df = pd.read_sql("SELECT * FROM calendar_events ORDER BY date", engine, parse_dates=["date"])
     except Exception as e:
-        logger.error(f"get_calendar_events read error: {e}")
+        print(f"get_calendar_events read error: {e}")
         return []
 
     if df.empty:
         return []
 
+    # Normalize columns to expected output
     if "date" in df.columns:
         df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
     else:
@@ -629,10 +598,9 @@ def train_model(store_id: str, request: Optional[PredictionRequest] = None):
             "regressors": active_regressors
         }
     except Exception as e:
-        logger.error(f"train_model error: {e}")
+        print(f"train_model error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# FIXED: Bug 4 - Added file locking for concurrent requests
 @app.post("/api/predict/{store_id}")
 def get_prediction(store_id: str, request: PredictionRequest):
     try:
@@ -641,45 +609,21 @@ def get_prediction(store_id: str, request: PredictionRequest):
             return {"status": "error", "message": "Need at least 30 days of sales history to forecast."}
 
         model_path = f"{MODEL_DIR}/store_{store_id}.json"
-        lock_path = f"{MODEL_DIR}/store_{store_id}.lock"
-        
-        # Acquire file lock to prevent race conditions
-        os.makedirs(MODEL_DIR, exist_ok=True)
-        lock_file = open(lock_path, 'w')
-        try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            
-            if not os.path.exists(model_path):
-                train_response = train_model(store_id, request)
-                if train_response.get("status") != "success":
-                    return train_response
-            
-            with open(model_path, 'r') as f:
-                model_json = f.read()
-                
-            # Validate model file
-            if not model_json or len(model_json) < 100:
-                raise HTTPException(status_code=500, detail="Model file corrupted. Please retrain.")
-                
-        finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            lock_file.close()
+        if not os.path.exists(model_path):
+            train_response = train_model(store_id, request)
+            if train_response.get("status") != "success":
+                return train_response
 
-        model = model_from_json(model_json)
+        with open(model_path, 'r') as f:
+            model = model_from_json(f.read())
+
         accuracy = calculate_forecast_accuracy(historical_df, model)
 
         db_events_df = load_calendar_events_df()
         request_event_dicts = normalize_request_events(request.events) if request and request.events else []
         event_lookup = build_event_lookup(db_events_df, request_event_dicts)
 
-        # FIXED: Bug 2 - Validate forecast days
         forecast_days = request.days if request and request.days else FORECAST_HORIZON_DAYS
-        if forecast_days < MIN_FORECAST_DAYS or forecast_days > MAX_FORECAST_DAYS:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Forecast days must be between {MIN_FORECAST_DAYS} and {MAX_FORECAST_DAYS}"
-            )
-
         future = model.make_future_dataframe(periods=forecast_days)
         future = apply_future_regressors(future, historical_df, event_lookup)
 
@@ -687,23 +631,9 @@ def get_prediction(store_id: str, request: PredictionRequest):
         future_for_model = future[["ds", *expected_regressors]] if expected_regressors else future[["ds"]]
         forecast = model.predict(future_for_model)
 
-        # FIXED: Bug 3 - Check for empty forecast
-        if forecast.empty:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to generate forecast. Model may need retraining."
-            )
-
         historical_lookup = {pd.to_datetime(row['ds']).date(): float(row['y']) for _, row in historical_df.iterrows()}
         chart_window = forecast_days + 60
         forecast_tail = forecast.tail(chart_window)
-
-        # FIXED: Bug 3 - Additional empty check
-        if forecast_tail.empty:
-            raise HTTPException(
-                status_code=500,
-                detail="Forecast data is empty after processing."
-            )
 
         chart_data = []
         chart_dates = []
@@ -747,7 +677,7 @@ def get_prediction(store_id: str, request: PredictionRequest):
         try:
             products_df = pd.read_sql(products_query, engine)
         except Exception as e:
-            logger.error(f"products_query read error: {e}")
+            print(f"products_query read error: {e}")
             products_df = pd.DataFrame(columns=["id", "name", "stock", "category", "sold_units"])
 
         recommendations = []
@@ -756,20 +686,15 @@ def get_prediction(store_id: str, request: PredictionRequest):
             predicted_demand = int(round(base_units * growth_factor))
             current_stock = int(product.get('stock', 0) or 0)
             restock_needed = max(0, predicted_demand - current_stock)
-            
-            # FIXED: Bug 8 - Improved urgency calculation
-            if predicted_demand > 0:
-                stock_coverage_ratio = current_stock / predicted_demand
-                
-                if stock_coverage_ratio < 0.4:  # Less than 40% coverage
+            if current_stock > 0:
+                if restock_needed > current_stock * 0.6:
                     urgency = 'high'
-                elif stock_coverage_ratio < 0.7:  # 40-70% coverage
+                elif restock_needed > current_stock * 0.3:
                     urgency = 'medium'
                 else:
                     urgency = 'low'
             else:
-                urgency = 'low'
-            
+                urgency = 'high' if restock_needed > 0 else 'low'
             recommendations.append({
                 "productId": str(product.get('id')),
                 "productName": product.get('name'),
@@ -806,10 +731,8 @@ def get_prediction(store_id: str, request: PredictionRequest):
             "eventAnnotations": annotation_payload,
             "meta": meta
         }
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"get_prediction error: {e}")
+        print(f"get_prediction error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -852,7 +775,7 @@ def restock_product(request: RestockRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"restock_product error: {e}")
+        print(f"restock_product error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class UpdateStockRequest(BaseModel):
@@ -893,15 +816,15 @@ def update_product_stock(product_id: str, request: UpdateStockRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"update_product_stock error: {e}")
+        print(f"update_product_stock error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# FIXED: Bug 1 - Consistent ID retrieval
 @app.post("/api/products")
 def add_product(request: AddProductRequest):
-    """Add a new product"""
+    """Add a new product (fixed to insert cost_price & selling_price)"""
     try:
         with engine.connect() as conn:
+            # Insert new product using cost_price & selling_price fields to match other queries
             result = conn.execute(
                 text("""
                     INSERT INTO products (name, category, stock, cost_price, selling_price)
@@ -914,22 +837,22 @@ def add_product(request: AddProductRequest):
                     "stock": request.initialStock
                 }
             )
-            # Use fetchone() consistently
-            row = result.fetchone()
-            if row is None:
-                raise HTTPException(status_code=500, detail="Failed to create product")
-            product_id = row[0]
+            # Use scalar() to fetch the returning id safely
+            try:
+                product_id = result.scalar()
+            except Exception:
+                row = result.fetchone()
+                product_id = row[0] if row is not None else None
+
             conn.commit()
 
         return {
             "status": "success",
             "message": f"Product {request.name} added successfully",
-            "productId": str(product_id)
+            "productId": product_id
         }
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"add_product error: {e}")
+        print(f"add_product error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/products/{product_id}")
@@ -960,7 +883,7 @@ def delete_product(product_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"delete_product error: {e}")
+        print(f"delete_product error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class ChatMessage(BaseModel):
@@ -1083,79 +1006,42 @@ def parse_action_from_message(message: str, prediction_data: Optional[Prediction
 
     return ActionPayload(type="none", needsConfirmation=False)
 
-# FIXED: Bug 7 - Added API key check
-# Updated to use Google Generative AI SDK with gemini-2.5-flash
-def call_gemini_api(prompt: str, system_instruction: str) -> str:
-    if not GEMINI_API_KEY:
-        return "AI chat is currently unavailable. Please configure GEMINI_API_KEY environment variable."
-    
+def call_gemini_api(prompt: str) -> str:
     try:
-        # Configure generation settings
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": 1024,
+        headers = {
+            "Content-Type": "application/json"
         }
-        
-        # Safety settings to prevent blocking
-        safety_settings = [
-            {
-                "category": "HARM_CATEGORY_HARASSMENT",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_HATE_SPEECH",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "threshold": "BLOCK_NONE"
-            },
-        ]
-        
-        # Create model instance with system instruction
-        model = genai.GenerativeModel(
-            'gemini-2.5-flash',
-            generation_config=generation_config,
-            system_instruction=system_instruction,
-            safety_settings=safety_settings
+
+        body = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }]
+        }
+
+        response = requests.post(
+            f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
+            headers=headers,
+            json=body,
+            timeout=30
         )
-        
-        # Generate response
-        response = model.generate_content(prompt)
-        
-        # Check if response was blocked
-        if not response.candidates:
-            logger.warning("Response blocked by safety filters")
-            return "I apologize, but I cannot generate a response for this request due to safety filters."
-        
-        # Extract text from response
-        if hasattr(response, 'text') and response.text:
-            return response.text
-        else:
-            logger.warning(f"No text in response. Candidates: {response.candidates}")
-            return "I apologize, but I could not generate a response."
+
+        if response.status_code != 200:
+            raise Exception(f"Gemini API error: {response.status_code} - {response.text}")
+
+        data = response.json()
+
+        if 'candidates' in data and len(data['candidates']) > 0:
+            candidate = data['candidates'][0]
+            if 'content' in candidate and 'parts' in candidate['content']:
+                parts = candidate['content']['parts']
+                if len(parts) > 0 and 'text' in parts[0]:
+                    return parts[0]['text']
+
+        return "I apologize, but I could not generate a response."
 
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Gemini API error: {error_msg}", exc_info=True)
-        
-        # Provide more helpful error messages
-        if "LEAKED" in error_msg.upper() or "REPORTED" in error_msg.upper():
-            return "AI chat error: Your API key was reported as leaked and has been disabled. Please generate a new API key at https://aistudio.google.com/apikey and update backend/.env file."
-        elif "API_KEY" in error_msg.upper() or "INVALID" in error_msg.upper():
-            return "AI chat error: Invalid API key. Please check your GEMINI_API_KEY configuration."
-        elif "PERMISSION_DENIED" in error_msg.upper():
-            return "AI chat error: Permission denied. Please enable the Gemini API in your Google Cloud project."
-        elif "RESOURCE_EXHAUSTED" in error_msg.upper() or "QUOTA" in error_msg.upper():
-            return "AI chat error: Rate limit or quota exceeded. Please try again later."
-        else:
-            return f"AI chat error: {error_msg}"
+        print(f"Gemini API error: {e}")
+        return "Sorry, I encountered an error processing your request."
 
 @app.post("/api/chat")
 def ai_chat(request: ChatRequest) -> ChatResponse:
@@ -1167,12 +1053,15 @@ def ai_chat(request: ChatRequest) -> ChatResponse:
             for msg in request.chatHistory[-5:]
         ])
 
-        user_prompt = f"""{history_text}
+        full_prompt = f"""{system_context}
+
+{history_text}
 
 User: {request.message}
 
-Assistant: Please provide a clear and helpful response."""
-        ai_response = call_gemini_api(user_prompt, system_context)
+Assistant: Respond clearly and concisely."""
+
+        ai_response = call_gemini_api(full_prompt)
 
         action = parse_action_from_message(request.message, request.predictionData)
 
@@ -1182,6 +1071,5 @@ Assistant: Please provide a clear and helpful response."""
         )
 
     except Exception as e:
-        logger.error(f"AI Chat error: {e}")
+        print(f"AI Chat error: {e}")
         raise HTTPException(status_code=500, detail=f"AI processing error: {str(e)}")
-

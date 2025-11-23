@@ -14,6 +14,7 @@ export interface PredictionRequest {
   store_config: {
     CompetitionDistance: number;
   };
+  days?: number;
 }
 
 export interface PredictionResponse {
@@ -47,6 +48,7 @@ export interface PredictionResponse {
     forecastDays?: number;
     lastHistoricalDate?: string;
     regressors?: string[];
+    accuracy?: number;
   };
 }
 
@@ -83,7 +85,8 @@ class ApiService {
   async getPrediction(
     storeId: string,
     events: CalendarEvent[],
-    storeConfig?: { CompetitionDistance: number }
+    storeConfig?: { CompetitionDistance: number },
+    days?: number
   ): Promise<PredictionResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/predict/${storeId}`, {
@@ -94,6 +97,7 @@ class ApiService {
         body: JSON.stringify({
           events,
           store_config: storeConfig || { CompetitionDistance: 500 },
+          days: days || 84,
         }),
       });
 
@@ -104,6 +108,94 @@ class ApiService {
       return await response.json();
     } catch (error) {
       console.error('Error getting prediction:', error);
+      throw error;
+    }
+  }
+
+  async restockProduct(productId: string, quantity: number): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseUrl}/restock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          productId,
+          quantity,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Restock failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error restocking product:', error);
+      throw error;
+    }
+  }
+
+  async addProduct(productData: { name: string; category?: string; initialStock: number }): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseUrl}/products`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Add product failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error adding product:', error);
+      throw error;
+    }
+  }
+
+  async deleteProduct(productId: string): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseUrl}/products/${productId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Delete product failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      throw error;
+    }
+  }
+
+  async updateStock(productId: string, newStock: number): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseUrl}/products/${productId}/stock`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stock: newStock,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Update stock failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating stock:', error);
       throw error;
     }
   }

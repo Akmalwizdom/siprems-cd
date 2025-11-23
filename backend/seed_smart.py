@@ -1,3 +1,10 @@
+"""
+SIPREMS Seed Script - FIXED VERSION
+Fixes applied:
+- Bug 5: Removed global state mutation (CALENDAR_EVENTS)
+- Improved code organization and parameter passing
+"""
+
 import os
 import random
 import uuid
@@ -56,8 +63,7 @@ PRODUCT_CATALOG = [
     {"sku": "SN-030", "name": "Strawberry Cheesecake Frappe", "category": "Seasonal", "cost_price": 1.95, "selling_price": 5.90, "stock": 125, "is_seasonal": True, "description": "Summer berry frappe."}
 ]
 
-# Calendar events will be generated dynamically based on START_DATE
-# This function will be called after START_DATE is determined
+# FIXED: Bug 5 - Function generates events without global state
 def generate_calendar_events(start_date, num_days):
     """Generate calendar events spread throughout the date range"""
     events = []
@@ -86,8 +92,6 @@ def generate_calendar_events(start_date, num_days):
     events.append({"date": end_date + timedelta(days=25), "title": "New Product Launch", "type": "event", "impact_weight": 0.70, "category": "upcoming", "description": "Exciting new menu items."})
     
     return events
-
-CALENDAR_EVENTS = []  # Will be populated in main()
 
 PAYMENT_METHODS = ["Cash", "QRIS", "Debit Card", "Credit Card", "E-Wallet"]
 CUSTOMER_SEGMENTS = ["dine-in", "takeaway", "delivery"]
@@ -141,12 +145,13 @@ def seed_products(conn):
     return [dict(row._mapping) for row in rows]
 
 
-def seed_calendar(conn):
+# FIXED: Bug 5 - Pass calendar_events as parameter
+def seed_calendar(conn, calendar_events):
     insert_sql = text("""
         INSERT INTO calendar_events (date, title, type, impact_weight, category, description)
         VALUES (:date, :title, :type, :impact_weight, :category, :description)
     """)
-    conn.execute(insert_sql, CALENDAR_EVENTS)
+    conn.execute(insert_sql, calendar_events)
 
 
 def segment_for_hour(hour: int) -> str:
@@ -196,14 +201,15 @@ def pick_product(segment: str, category_map, all_products, used_ids):
     return random.choice(fallback)
 
 
-def build_transactions(product_rows):
+# FIXED: Bug 5 - Pass calendar_events as parameter
+def build_transactions(product_rows, calendar_events):
     category_map = defaultdict(list)
     for prod in product_rows:
         category_map[prod["category"]].append(prod)
     all_products = [prod for prod in product_rows]
 
     events_map = defaultdict(list)
-    for evt in CALENDAR_EVENTS:
+    for evt in calendar_events:
         events_map[evt["date"]].append(evt)
 
     hour_choices = list(HOUR_DISTRIBUTION.keys())
@@ -270,23 +276,22 @@ def insert_transactions(conn, transactions_batch, items_batch):
     conn.execute(item_sql, items_batch)
 
 
+# FIXED: Bug 5 - No global state, all passed as parameters
 def main():
-    global CALENDAR_EVENTS
-    
     # Generate dynamic calendar events based on the calculated date range
-    CALENDAR_EVENTS = generate_calendar_events(START_DATE, NUM_DAYS)
+    calendar_events = generate_calendar_events(START_DATE, NUM_DAYS)
     
     with engine.begin() as conn:
         reset_tables(conn)
         product_rows = seed_products(conn)
-        seed_calendar(conn)
-        transactions_batch, items_batch = build_transactions(product_rows)
+        seed_calendar(conn, calendar_events)  # Pass as parameter
+        transactions_batch, items_batch = build_transactions(product_rows, calendar_events)  # Pass as parameter
         insert_transactions(conn, transactions_batch, items_batch)
 
     total_transactions = len(transactions_batch)
     avg_per_day = total_transactions / NUM_DAYS
     print(f"Date range: {START_DATE} to {START_DATE + timedelta(days=NUM_DAYS - 1)}")
-    print(f"Seeded {len(PRODUCT_CATALOG)} products, {len(CALENDAR_EVENTS)} calendar events.")
+    print(f"Seeded {len(PRODUCT_CATALOG)} products, {len(calendar_events)} calendar events.")
     print(f"Generated {total_transactions} transactions (~{avg_per_day:.1f}/day) across {NUM_DAYS} days.")
     print(f"Generated {len(items_batch)} transaction line items to power Prophet forecasts.")
 
