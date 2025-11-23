@@ -972,7 +972,7 @@ class PredictionDataForChat(BaseModel):
     chartData: List[Dict]
     recommendations: List[Dict]
     eventAnnotations: List[Dict]
-    meta: Dict
+    meta: Optional[Dict] = None
 
 class ChatRequest(BaseModel):
     message: str
@@ -995,7 +995,7 @@ def build_ai_context(prediction_data: Optional[PredictionDataForChat]) -> str:
         return "You are the SIPREMS Assistant Chatbot. Help users understand predictions and manage stock. When no prediction data is available, guide them to start a prediction first."
 
     recommendations = prediction_data.recommendations
-    meta = prediction_data.meta
+    meta = prediction_data.meta or {}
     events = prediction_data.eventAnnotations
 
     restock_list = "\n".join([
@@ -1008,10 +1008,10 @@ def build_ai_context(prediction_data: Optional[PredictionDataForChat]) -> str:
         for e in events
     ]) if events else "- None"
 
-    accuracy = meta.get('accuracy', 'N/A')
-    applied_factor = meta.get('applied_factor', 1.0)
+    accuracy = meta.get('accuracy', 'N/A') if meta else 'N/A'
+    applied_factor = meta.get('applied_factor', 1.0) if meta else 1.0
     growth_factor = (applied_factor - 1) * 100
-    forecast_days = meta.get('forecastDays', 0)
+    forecast_days = meta.get('forecastDays', 0) if meta else 0
 
     context = f"""You are the SIPREMS Assistant Chatbot for stock prediction and inventory management.
 
@@ -1044,15 +1044,17 @@ def parse_action_from_message(message: str, prediction_data: Optional[Prediction
     message_lower = message.lower()
 
     restock_match = re.search(r'restock\s+(\w+(?:\s+\w+)*)', message_lower, re.IGNORECASE)
-    if restock_match and prediction_data:
+    if restock_match and prediction_data and prediction_data.recommendations:
         product_name = restock_match.group(1)
         for rec in prediction_data.recommendations:
-            if product_name.lower() in rec['productName'].lower():
+            # Safely get product name with fallback
+            rec_product_name = rec.get('productName', '')
+            if rec_product_name and product_name.lower() in rec_product_name.lower():
                 return ActionPayload(
                     type="restock",
-                    productId=rec['productId'],
-                    productName=rec['productName'],
-                    quantity=rec['recommendedRestock'],
+                    productId=str(rec.get('productId', '')),
+                    productName=rec_product_name,
+                    quantity=int(rec.get('recommendedRestock', 0)),
                     needsConfirmation=True
                 )
 

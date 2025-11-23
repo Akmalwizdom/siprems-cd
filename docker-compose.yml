@@ -22,7 +22,7 @@ services:
       - model_data:/app/models # Persist model files
     environment:
       DATABASE_URL: postgresql://user:password@db:5432/siprems_db
-      GEMINI_API_KEY: AIzaSyArW-NVx4oRLocYHXKgXBtzkhp0x6tnio0
+      GEMINI_API_KEY: AIzaSyAijX_7tW8FN9_x3sfeVmVGGJ_K1Pjh8g0
     ports:
       - "8000:8000"
     depends_on:
