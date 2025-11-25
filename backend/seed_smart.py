@@ -11,11 +11,18 @@ import uuid
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 random.seed(42)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/siprems_db")
+# Load environment variables from .env file (override system env vars)
+load_dotenv(override=True)
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set. Please check your .env file.")
+
 engine = create_engine(DATABASE_URL)
 
 # Product catalog (30 items)
@@ -122,10 +129,11 @@ SEGMENT_WEIGHTS = {
     "evening": {"Coffee": 0.42, "Tea": 0.08, "Pastry": 0.12, "Light Meals": 0.18, "Non-Coffee": 0.12, "Seasonal": 0.08}
 }
 
-# Generate data ending ~7 days ago so there's recent historical data
-END_DATE = date.today() - timedelta(days=7)
-NUM_DAYS = 183  # ~6 months
-START_DATE = END_DATE - timedelta(days=NUM_DAYS - 1)
+# Generate 100 days of data for Prophet long-range forecasting (30-90 days)
+# Date range: August 9 - November 17, 2025
+START_DATE = date(2025, 8, 9)
+END_DATE = date(2025, 11, 17)
+NUM_DAYS = (END_DATE - START_DATE).days + 1  # 100 days
 
 
 def reset_tables(conn):
@@ -262,7 +270,8 @@ def build_transactions(product_rows, calendar_events):
     return transactions_batch, items_batch
 
 
-def insert_transactions(conn, transactions_batch, items_batch):
+def insert_transactions_batched(engine_obj, transactions_batch, items_batch):
+    """Insert transactions in smaller committed batches for better performance"""
     tx_sql = text("""
         INSERT INTO transactions (id, date, total_amount, payment_method, customer_segment, items_count)
         VALUES (:id, :date, :total_amount, :payment_method, :customer_segment, :items_count)
@@ -272,28 +281,71 @@ def insert_transactions(conn, transactions_batch, items_batch):
         VALUES (:transaction_id, :product_id, :quantity, :unit_price, :subtotal)
     """)
 
-    conn.execute(tx_sql, transactions_batch)
-    conn.execute(item_sql, items_batch)
+    # Balanced batch sizes: large enough to reduce roundtrips, small enough to succeed
+    tx_batch_size = 3000  # 3 batches for ~6000 transactions
+    item_batch_size = 3000  # 4 batches for ~12000 items
+    
+    total_tx = len(transactions_batch)
+    total_items = len(items_batch)
+    
+    print(f"Inserting {total_tx} transactions in batches of {tx_batch_size}...")
+    for i in range(0, total_tx, tx_batch_size):
+        batch = transactions_batch[i:i+tx_batch_size]
+        with engine_obj.begin() as conn:
+            conn.execute(tx_sql, batch)
+        print(f"  Progress: {min(i+tx_batch_size, total_tx)}/{total_tx} - Batch {i//tx_batch_size + 1}")
+    
+    print(f"\nInserting {total_items} transaction items in batches of {item_batch_size}...")
+    for i in range(0, total_items, item_batch_size):
+        batch = items_batch[i:i+item_batch_size]
+        print(f"  Batch {i//item_batch_size + 1}: Inserting {len(batch)} items...")
+        with engine_obj.begin() as conn:
+            conn.execute(item_sql, batch)
+        print(f"  Progress: {min(i+item_batch_size, total_items)}/{total_items}")
 
 
 # FIXED: Bug 5 - No global state, all passed as parameters
 def main():
-    # Generate dynamic calendar events based on the calculated date range
-    calendar_events = generate_calendar_events(START_DATE, NUM_DAYS)
+    print("Starting seed process...")
+    print(f"Date range: {START_DATE} to {START_DATE + timedelta(days=NUM_DAYS - 1)}")
     
+    # Generate dynamic calendar events based on the calculated date range
+    print("\n1. Generating calendar events...")
+    calendar_events = generate_calendar_events(START_DATE, NUM_DAYS)
+    print(f"   Generated {len(calendar_events)} events")
+    
+    print("\n2. Connecting to database and clearing existing data...")
     with engine.begin() as conn:
         reset_tables(conn)
+        print("   Tables cleared")
+        
+        print("\n3. Seeding products...")
         product_rows = seed_products(conn)
-        seed_calendar(conn, calendar_events)  # Pass as parameter
-        transactions_batch, items_batch = build_transactions(product_rows, calendar_events)  # Pass as parameter
-        insert_transactions(conn, transactions_batch, items_batch)
+        print(f"   Inserted {len(product_rows)} products")
+        
+        print("\n4. Seeding calendar events...")
+        seed_calendar(conn, calendar_events)
+        print(f"   Inserted {len(calendar_events)} calendar events")
+        
+        print("\n5. Building transaction data...")
+        transactions_batch, items_batch = build_transactions(product_rows, calendar_events)
+        print(f"   Generated {len(transactions_batch)} transactions with {len(items_batch)} items")
+    
+    # Insert transactions in separate batched transactions (outside the main transaction)
+    print("\n6. Inserting transactions and items...")
+    insert_transactions_batched(engine, transactions_batch, items_batch)
 
     total_transactions = len(transactions_batch)
     avg_per_day = total_transactions / NUM_DAYS
+    print(f"\n{'='*60}")
+    print(f"SEEDING COMPLETED SUCCESSFULLY!")
+    print(f"{'='*60}")
+    print(f"Products: {len(PRODUCT_CATALOG)}")
+    print(f"Calendar events: {len(calendar_events)}")
+    print(f"Transactions: {total_transactions} (~{avg_per_day:.1f}/day over {NUM_DAYS} days)")
+    print(f"Transaction items: {len(items_batch)}")
     print(f"Date range: {START_DATE} to {START_DATE + timedelta(days=NUM_DAYS - 1)}")
-    print(f"Seeded {len(PRODUCT_CATALOG)} products, {len(calendar_events)} calendar events.")
-    print(f"Generated {total_transactions} transactions (~{avg_per_day:.1f}/day) across {NUM_DAYS} days.")
-    print(f"Generated {len(items_batch)} transaction line items to power Prophet forecasts.")
+    print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":

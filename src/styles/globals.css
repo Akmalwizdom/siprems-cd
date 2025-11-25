@@ -188,6 +188,10 @@ html {
   font-size: var(--font-size);
 }
 
+/* Fix for button background colors - Override Tailwind's transparent base reset */
+/* This ensures bg-* utility classes work on buttons without modifying classNames */
+
+
 /* Custom animation for loading bar */
 @keyframes loading {
   0% {

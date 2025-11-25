@@ -1,13 +1,27 @@
 import os
 from typing import Optional
-
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 import pandas as pd
 
-# Mengambil URL DB dari environment variable docker
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@db:5432/siprems_db")
+# Load environment variables from .env file (override system env vars)
+load_dotenv(override=True)
 
-engine = create_engine(DATABASE_URL)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set. Please configure Supabase connection.")
+
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=NullPool,
+    pool_pre_ping=True,
+    connect_args={
+        "connect_timeout": 10,
+        "application_name": "siprems_backend"
+    }
+)
 
 def get_store_data(store_id: Optional[int] = None):
     """Ambil ringkasan harian untuk kebutuhan model Prophet."""
