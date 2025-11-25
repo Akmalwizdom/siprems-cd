@@ -1,8 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pandas
 numpy
-prophet
+prophet>=1.1.5
+cmdstanpy>=1.2.0
 psycopg2-binary
 sqlalchemy
 pydantic

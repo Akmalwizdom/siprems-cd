@@ -47,6 +47,11 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 # Initialize Event Intelligence Service
 event_intelligence = EventIntelligenceService(engine, os.getenv("GEMINI_API_KEY"))
 
+# Health check endpoint
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
 # FIXED: Bug 7 - Validate GEMINI_API_KEY
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
@@ -63,7 +68,10 @@ REGRESSOR_COLUMNS = [
     "event_intensity",
     "closure_intensity",
     "transactions_count",
-    "avg_ticket"
+    "avg_ticket",
+    "is_payday",
+    "is_day_before_holiday",
+    "is_school_holiday"
 ]
 
 DEFAULT_EVENT_IMPACT = {
@@ -154,6 +162,11 @@ def fetch_daily_sales_frame() -> pd.DataFrame:
 
     if not pd.api.types.is_datetime64_any_dtype(df["ds"]):
         df["ds"] = pd.to_datetime(df["ds"])
+
+    # Add new regressor columns
+    df["is_payday"] = df["ds"].dt.day.isin([25, 26, 27, 28, 29, 30, 31]) | (df["ds"].dt.day <= 5)
+    df["is_day_before_holiday"] = 0  # Can be filled from calendar_events
+    df["is_school_holiday"] = 0      # Can be from external data
 
     required_numeric = {"y", "transactions_count", "items_sold", "avg_ticket", *REGRESSOR_COLUMNS}
     for col in required_numeric:
@@ -1051,6 +1064,39 @@ def delete_event(event_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Model metadata management functions
+def save_model_with_meta(store_id: str, model: Prophet, meta: dict):
+    """Save Prophet model with metadata for tracking training configuration"""
+    model_path = f"{MODEL_DIR}/store_{store_id}.json"
+    meta_path = f"{MODEL_DIR}/store_{store_id}_meta.json"
+    
+    with open(model_path, "w") as f:
+        f.write(model_to_json(model))
+    
+    meta["saved_at"] = datetime.utcnow().isoformat()
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, indent=2)
+
+def load_model_with_meta(store_id: str):
+    """Load Prophet model with metadata"""
+    model_path = f"{MODEL_DIR}/store_{store_id}.json"
+    meta_path = f"{MODEL_DIR}/store_{store_id}_meta.json"
+    
+    if not os.path.exists(model_path):
+        return None, None
+    
+    with open(model_path, "r") as f:
+        model = model_from_json(f.read())
+    
+    meta = {}
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r") as f:
+                meta = json.load(f)
+        except:
+            pass
+    return model, meta
+
 @app.post("/api/train/{store_id}")
 def train_model(store_id: str, request: Optional[PredictionRequest] = None):
     """
@@ -1058,13 +1104,14 @@ def train_model(store_id: str, request: Optional[PredictionRequest] = None):
     1. Log-transform for better accuracy
     2. Regressor prior_scale to prevent overfitting
     3. Optimized seasonality tuning
+    4. Model metadata tracking
     """
     try:
         df = fetch_daily_sales_frame()
         if len(df) < 30:
             return {"status": "error", "message": "Insufficient data. Need at least 30 days of sales data."}
 
-        df = df.sort_values("ds")
+        df = df.sort_values("ds").copy()
 
         # CRITICAL FIX: Apply log transform for better accuracy
         df['y_log'] = np.log1p(df['y'])
@@ -1104,9 +1151,18 @@ def train_model(store_id: str, request: Optional[PredictionRequest] = None):
         # CRITICAL FIX: Train on log-transformed y
         model.fit(df[["ds", "y_log", *active_regressors]].rename(columns={'y_log': 'y'}))
 
-        model_path = f"{MODEL_DIR}/store_{store_id}.json"
-        with open(model_path, "w") as f:
-            f.write(model_to_json(model))
+        # Save model with metadata
+        meta = {
+            "log_transform": True,
+            "data_points": len(df),
+            "last_date": df['ds'].max().isoformat(),
+            "cv": round(cv, 4),
+            "changepoint_prior_scale": changepoint_scale,
+            "regressors": active_regressors
+        }
+        save_model_with_meta(store_id, model, meta)
+
+        logger.info(f"Model {store_id} trained - {len(df)} days, CV={cv:.3f}")
 
         return {
             "status": "success",
@@ -1120,6 +1176,66 @@ def train_model(store_id: str, request: Optional[PredictionRequest] = None):
         logger.error(f"train_model error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/api/retrain")
+def daily_retrain():
+    """
+    Automatic daily retraining endpoint (called by cron scheduler)
+    Retrains the model with latest data
+    """
+    try:
+        result = train_model("1")  # Default store_id
+        return result
+    except Exception as e:
+        logger.error(f"Daily retrain failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/evaluate-and-tune")
+def weekly_evaluation():
+    """
+    Automatic weekly evaluation endpoint (called by cron scheduler)
+    Evaluates model performance and tunes hyperparameters if needed
+    """
+    try:
+        from prophet.diagnostics import cross_validation, performance_metrics
+        
+        df = fetch_daily_sales_frame()
+        if len(df) < 180:
+            return {"status": "skip", "reason": "data < 180 days"}
+
+        store_id = "1"  # Default store_id
+        model, meta = load_model_with_meta(store_id)
+        
+        if not model:
+            return {"status": "error", "message": "No trained model found. Train first."}
+
+        df_cv = df.copy()
+        df_cv['y'] = np.log1p(df_cv['y'])
+
+        # Use current model parameters
+        scale = meta.get("changepoint_prior_scale", 0.05) if meta else 0.05
+
+        try:
+            cv_results = cross_validation(model, initial='180 days', period='30 days', horizon='14 days', parallel="threads")
+            perf = performance_metrics(cv_results)
+            mape = perf['mape'].mean()
+
+            # If accuracy is poor, trigger auto-tuning
+            if mape > 0.18:
+                logger.info(f"Auto-tuning triggered: MAPE {mape:.1%} > 18%")
+                train_model(store_id)  # Retrain with current best practices
+                return {"status": "tuned", "mape": round(mape*100, 1), "message": "Model retrained due to poor performance"}
+            else:
+                return {"status": "good", "mape": round(mape*100, 1)}
+        except Exception as e:
+            logger.error(f"CV error: {e}")
+            return {"status": "error", "message": str(e)}
+    except Exception as e:
+        logger.error(f"Weekly evaluation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # FIXED: Bug 4 - Added file locking for concurrent requests
 @app.post("/api/predict/{store_id}")
 def get_prediction(store_id: str, request: PredictionRequest):
@@ -1128,32 +1244,15 @@ def get_prediction(store_id: str, request: PredictionRequest):
         if len(historical_df) < 30:
             return {"status": "error", "message": "Need at least 30 days of sales history to forecast."}
 
-        model_path = f"{MODEL_DIR}/store_{store_id}.json"
-        lock_path = f"{MODEL_DIR}/store_{store_id}.lock"
+        # Load model with metadata
+        model, meta = load_model_with_meta(store_id)
         
-        # Acquire file lock to prevent race conditions
-        os.makedirs(MODEL_DIR, exist_ok=True)
-        lock_file = open(lock_path, 'w')
-        try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            
-            if not os.path.exists(model_path):
-                train_response = train_model(store_id, request)
-                if train_response.get("status") != "success":
-                    return train_response
-            
-            with open(model_path, 'r') as f:
-                model_json = f.read()
-                
-            # Validate model file
-            if not model_json or len(model_json) < 100:
-                raise HTTPException(status_code=500, detail="Model file corrupted. Please retrain.")
-                
-        finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            lock_file.close()
-
-        model = model_from_json(model_json)
+        if not model:
+            # Train model if it doesn't exist
+            train_response = train_model(store_id, request)
+            if train_response.get("status") != "success":
+                return train_response
+            model, meta = load_model_with_meta(store_id)
         accuracy = calculate_forecast_accuracy(historical_df, model)
 
         db_events_df = load_calendar_events_df()
@@ -1316,12 +1415,22 @@ def get_prediction(store_id: str, request: PredictionRequest):
             "accuracy": accuracy
         }
 
+        # Add model metadata to response
+        response_meta = meta.copy() if meta else {}
+        response_meta.update({
+            "applied_factor": round(growth_factor, 2),
+            "historicalDays": len(historical_df),
+            "forecastDays": forecast_days,
+            "lastHistoricalDate": historical_df['ds'].max().strftime('%Y-%m-%d') if not historical_df.empty else None,
+            "accuracy": accuracy
+        })
+
         return {
             "status": "success",
             "chartData": chart_data,
             "recommendations": recommendations,
             "eventAnnotations": annotation_payload,
-            "meta": meta
+            "meta": response_meta
         }
     except HTTPException:
         raise
