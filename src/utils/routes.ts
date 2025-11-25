@@ -5,7 +5,7 @@ import { Register } from '../pages/Register';
 import { Dashboard } from '../pages/Dashboard';
 import { Transaction } from '../pages/Transaction';
 import { Products } from '../pages/Products';
-import { Calendar } from '../pages/Calendar';
+import { CalendarImproved as Calendar } from '../pages/CalendarImproved';
 import { SmartPrediction } from '../pages/SmartPrediction';
 import { Settings } from '../pages/Settings';
 

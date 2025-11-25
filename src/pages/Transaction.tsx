@@ -9,7 +9,7 @@ interface Transaction {
   date: string;
   total_amount: number;
   payment_method: string;
-  customer_segment: string;
+  order_types: string;
   items_count: number;
 }
 
@@ -29,6 +29,10 @@ export function Transaction() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [categories, setCategories] = useState<string[]>(['All']);
   const [cart, setCart] = useState<CartItem[]>([]);
+  
+  // Payment and Order Type state
+  const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
+  const [orderType, setOrderType] = useState<string>('dine-in');
   
   // Transaction History state
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -150,10 +154,52 @@ export function Transaction() {
   const tax = subtotal * 0.1;
   const total = subtotal + tax;
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) return;
-    alert(`Transaction completed! Total: $${total.toFixed(2)}`);
-    setCart([]);
+    
+    setLoading(true);
+    try {
+      const transactionData = {
+        date: new Date().toISOString(),
+        total_amount: total,
+        payment_method: paymentMethod,
+        order_types: orderType,
+        items_count: cart.reduce((sum, item) => sum + item.quantity, 0),
+        items: cart.map(item => ({
+          product_id: parseInt(item.product.id),
+          quantity: item.quantity,
+          unit_price: item.product.sellingPrice,
+          subtotal: item.product.sellingPrice * item.quantity
+        }))
+      };
+      
+      const response = await fetch(`${API_BASE_URL}/transactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(transactionData),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to save transaction');
+      }
+      
+      const result = await response.json();
+      alert(`Transaction completed successfully! Total: $${total.toFixed(2)}\nTransaction ID: ${result.transaction_id?.slice(0, 8)}...`);
+      setCart([]);
+      setPaymentMethod('Cash');
+      setOrderType('dine-in');
+      
+      // Refresh products to update stock
+      await fetchProducts();
+    } catch (error) {
+      console.error('Error saving transaction:', error);
+      alert(`Failed to save transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -209,6 +255,10 @@ export function Transaction() {
           tax={tax}
           total={total}
           handleCheckout={handleCheckout}
+          paymentMethod={paymentMethod}
+          setPaymentMethod={setPaymentMethod}
+          orderType={orderType}
+          setOrderType={setOrderType}
         />
       ) : (
         <HistoryView
@@ -242,7 +292,11 @@ function POSView({
   subtotal,
   tax,
   total,
-  handleCheckout
+  handleCheckout,
+  paymentMethod,
+  setPaymentMethod,
+  orderType,
+  setOrderType
 }: any) {
   const filteredProducts = products.filter((product: Product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -393,6 +447,41 @@ function POSView({
               <span>Total</span>
               <span>${total.toFixed(2)}</span>
             </div>
+            
+            {/* Payment Method Selection */}
+            <div className="pt-3 border-t border-slate-200">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Payment Method
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="Cash">Cash</option>
+                <option value="QRIS">QRIS</option>
+                <option value="Debit Card">Debit Card</option>
+                <option value="Credit Card">Credit Card</option>
+                <option value="E-Wallet">E-Wallet</option>
+              </select>
+            </div>
+
+            {/* Order Type Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Order Type
+              </label>
+              <select
+                value={orderType}
+                onChange={(e) => setOrderType(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="dine-in">Dine In</option>
+                <option value="takeaway">Takeaway</option>
+                <option value="delivery">Delivery</option>
+              </select>
+            </div>
+
             <button
               onClick={handleCheckout}
               disabled={cart.length === 0}
@@ -454,7 +543,7 @@ function HistoryView({
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">{t.id.slice(0, 8)}...</td>
                   <td className="px-6 py-4">
                     <span className="px-2 py-1 bg-slate-100 rounded-md text-xs text-slate-600 border border-slate-200">
-                      {t.customer_segment || 'N/A'}
+                      {t.order_types || 'N/A'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-600">{t.payment_method || 'Cash'}</td>

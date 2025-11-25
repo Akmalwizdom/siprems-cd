@@ -18,6 +18,7 @@ interface StoreContextType {
   removeEvent: (id: string) => void;
   updateEvent: (id: string, event: Partial<CalendarEvent>) => void;
   clearEvents: () => void;
+  refetchEvents: () => Promise<void>;
   loading: boolean;
 }
 
@@ -36,8 +37,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch(`${API_BASE_URL}/calendar/events`);
       const data = await response.json();
-      const formattedEvents = data.map((e: any, index: number) => ({
-        id: `${index + 1}`,
+      const formattedEvents = data.map((e: any) => ({
+        id: e.id ? String(e.id) : `temp_${Date.now()}_${Math.random()}`,
         title: e.title,
         date: e.date,
         type: (e.type as CalendarEvent['type']) || 'promotion',
@@ -73,8 +74,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEvents([]);
   };
 
+  const refetchEvents = async () => {
+    await fetchEvents();
+  };
+
   return (
-    <StoreContext.Provider value={{ events, addEvent, removeEvent, updateEvent, clearEvents, loading }}>
+    <StoreContext.Provider value={{ events, addEvent, removeEvent, updateEvent, clearEvents, refetchEvents, loading }}>
       {children}
     </StoreContext.Provider>
   );

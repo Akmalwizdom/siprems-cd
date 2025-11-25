@@ -1,15 +1,3 @@
-"""
-SIPREMS Backend API - FIXED VERSION
-Fixes applied:
-- Bug 1: Fixed add_product ID retrieval
-- Bug 2: Added forecast days validation (1-365)
-- Bug 3: Added empty forecast check
-- Bug 4: Added file locking for model training
-- Bug 5: N/A (seed_smart.py issue)
-- Bug 6: Simplified date parsing in build_event_lookup
-- Bug 7: Added GEMINI_API_KEY validation
-- Bug 8: Fixed urgency calculation logic
-"""
 
 from collections import defaultdict
 from fastapi import FastAPI, HTTPException
@@ -29,6 +17,11 @@ from prophet.serialize import model_to_json, model_from_json
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
+from event_intelligence import (
+    EventIntelligenceService, 
+    EventSuggestion,
+    CalibrationResult
+)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -50,6 +43,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@db:5432/sip
 engine = create_engine(DATABASE_URL)
 MODEL_DIR = "/app/models"
 os.makedirs(MODEL_DIR, exist_ok=True)
+
+# Initialize Event Intelligence Service
+event_intelligence = EventIntelligenceService(engine, os.getenv("GEMINI_API_KEY"))
 
 # FIXED: Bug 7 - Validate GEMINI_API_KEY
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -91,7 +87,10 @@ MIN_FORECAST_DAYS = 1
 MAX_FORECAST_DAYS = 365  # FIXED: Bug 2 - Added max limit
 
 def calculate_forecast_accuracy(historical_df: pd.DataFrame, model: Prophet) -> float:
-    """Calculate prediction accuracy using MAPE on last 14 days of historical data"""
+    """
+    Calculate prediction accuracy using MAPE on last 14 days of historical data
+    CRITICAL: Accounts for log-scale model predictions
+    """
     if len(historical_df) < 30:
         return 0.0
 
@@ -110,8 +109,17 @@ def calculate_forecast_accuracy(historical_df: pd.DataFrame, model: Prophet) -> 
     try:
         forecast = model.predict(future_validation)
 
+        # CRITICAL FIX: Inverse transform log predictions
+        # Add safety check for backward compatibility
+        try:
+            if forecast['yhat'].max() < 20 and forecast['yhat'].min() > -5:
+                predicted = np.expm1(forecast['yhat'].values.clip(-10, 20))
+            else:
+                predicted = forecast['yhat'].values
+        except:
+            predicted = forecast['yhat'].values
+            
         actual = test_df['y'].values
-        predicted = forecast['yhat'].values
 
         mask = actual != 0
         if not mask.any():
@@ -157,8 +165,17 @@ def fetch_daily_sales_frame() -> pd.DataFrame:
 
 
 def load_calendar_events_df() -> pd.DataFrame:
+    """
+    Load calendar events for predictions
+    CRITICAL: Filters out rejected events to prevent accuracy contamination
+    """
     try:
-        df = pd.read_sql("SELECT * FROM calendar_events ORDER BY date", engine, parse_dates=["date"])
+        # CRITICAL FIX: Exclude rejected events from predictions
+        df = pd.read_sql(
+            "SELECT * FROM calendar_events WHERE user_decision IS NULL OR user_decision != 'rejected' ORDER BY date", 
+            engine, 
+            parse_dates=["date"]
+        )
     except Exception as e:
         logger.error(f"load_calendar_events_df error: {e}")
         return pd.DataFrame(columns=["date", "title", "type", "impact_weight", "category", "description"])
@@ -310,6 +327,20 @@ class PredictionRequest(BaseModel):
         le=365, 
         description="Number of days to forecast (1-365)"
     )
+
+class TransactionItemInput(BaseModel):
+    product_id: int
+    quantity: int
+    unit_price: float
+    subtotal: float
+
+class CreateTransactionRequest(BaseModel):
+    date: str
+    total_amount: float
+    payment_method: str
+    order_types: str
+    items_count: int
+    items: List[TransactionItemInput]
 
 def normalize_request_events(events: List[CalendarEventInput]) -> List[Dict]:
     normalized = []
@@ -532,7 +563,7 @@ def get_transactions(
             date,
             total_amount,
             payment_method,
-            customer_segment,
+            order_types,
             items_count,
             created_at
         FROM transactions
@@ -565,10 +596,122 @@ def get_transactions(
         "total_pages": (total + limit - 1) // limit if total else 0
     }
 
+@app.post("/api/transactions")
+def create_transaction(request: CreateTransactionRequest):
+    """Create a new transaction with items and update product stock"""
+    try:
+        # Validate payment method
+        valid_payment_methods = ['Cash', 'QRIS', 'Debit Card', 'Credit Card', 'E-Wallet']
+        if request.payment_method not in valid_payment_methods:
+            raise HTTPException(status_code=400, detail=f"Invalid payment method. Must be one of: {', '.join(valid_payment_methods)}")
+        
+        # Validate order type
+        valid_order_types = ['dine-in', 'takeaway', 'delivery']
+        if request.order_types not in valid_order_types:
+            raise HTTPException(status_code=400, detail=f"Invalid order type. Must be one of: {', '.join(valid_order_types)}")
+        
+        # Validate that items are provided
+        if not request.items or len(request.items) == 0:
+            raise HTTPException(status_code=400, detail="Transaction must have at least one item")
+        
+        with engine.connect() as conn:
+            # Start a transaction
+            trans = conn.begin()
+            try:
+                # Insert transaction header
+                transaction_result = conn.execute(
+                    text("""
+                        INSERT INTO transactions (date, total_amount, payment_method, order_types, items_count)
+                        VALUES (:date, :total_amount, :payment_method, :order_types, :items_count)
+                        RETURNING id
+                    """),
+                    {
+                        "date": request.date,
+                        "total_amount": request.total_amount,
+                        "payment_method": request.payment_method,
+                        "order_types": request.order_types,
+                        "items_count": request.items_count
+                    }
+                )
+                transaction_id = transaction_result.fetchone()[0]
+                
+                # Insert transaction items and update stock
+                for item in request.items:
+                    # Verify product exists and has sufficient stock
+                    product_result = conn.execute(
+                        text("SELECT stock, name FROM products WHERE id = :product_id"),
+                        {"product_id": item.product_id}
+                    ).mappings().first()
+                    
+                    if not product_result:
+                        raise HTTPException(status_code=404, detail=f"Product ID {item.product_id} not found")
+                    
+                    current_stock = int(product_result['stock'] or 0)
+                    product_name = product_result['name']
+                    
+                    if current_stock < item.quantity:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Insufficient stock for {product_name}. Available: {current_stock}, Requested: {item.quantity}"
+                        )
+                    
+                    # Insert transaction item
+                    conn.execute(
+                        text("""
+                            INSERT INTO transaction_items (transaction_id, product_id, quantity, unit_price, subtotal)
+                            VALUES (:transaction_id, :product_id, :quantity, :unit_price, :subtotal)
+                        """),
+                        {
+                            "transaction_id": transaction_id,
+                            "product_id": item.product_id,
+                            "quantity": item.quantity,
+                            "unit_price": item.unit_price,
+                            "subtotal": item.subtotal
+                        }
+                    )
+                    
+                    # Update product stock
+                    new_stock = current_stock - item.quantity
+                    conn.execute(
+                        text("UPDATE products SET stock = :new_stock WHERE id = :product_id"),
+                        {"new_stock": new_stock, "product_id": item.product_id}
+                    )
+                
+                # Commit transaction
+                trans.commit()
+                
+                return {
+                    "status": "success",
+                    "message": "Transaction created successfully",
+                    "transaction_id": str(transaction_id),
+                    "total_amount": request.total_amount,
+                    "items_count": request.items_count
+                }
+            
+            except HTTPException:
+                trans.rollback()
+                raise
+            except Exception as e:
+                trans.rollback()
+                logger.error(f"Transaction creation failed: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to create transaction: {str(e)}")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"create_transaction error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/calendar/events")
 def get_calendar_events():
     try:
-        df = pd.read_sql("SELECT * FROM calendar_events ORDER BY date", engine, parse_dates=["date"])
+        df = pd.read_sql("""
+            SELECT id, date, title, type, impact_weight, category, description,
+                   suggested_category, suggested_impact, ai_confidence, ai_rationale,
+                   user_decision, calibrated_impact, last_calibration_date, calibration_count
+            FROM calendar_events 
+            ORDER BY date
+        """, engine, parse_dates=["date", "last_calibration_date"])
     except Exception as e:
         logger.error(f"get_calendar_events read error: {e}")
         return []
@@ -576,26 +719,346 @@ def get_calendar_events():
     if df.empty:
         return []
 
+    # Format dates
     if "date" in df.columns:
         df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+    if "last_calibration_date" in df.columns:
+        df['last_calibration_date'] = df['last_calibration_date'].apply(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if pd.notna(x) else None
+        )
+
+    # Fill missing columns
+    for col in ["title", "type", "category", "description", "suggested_category", "ai_rationale", "user_decision"]:
+        if col not in df.columns:
+            df[col] = ""
+        else:
+            df[col] = df[col].fillna("")
+    
+    for col in ["impact_weight", "suggested_impact", "ai_confidence", "calibrated_impact"]:
+        if col not in df.columns:
+            df[col] = None
+        else:
+            # Replace NaN with None for JSON serialization
+            df[col] = df[col].replace({float('nan'): None})
+    
+    if "calibration_count" not in df.columns:
+        df["calibration_count"] = 0
     else:
-        df['date'] = ""
+        df["calibration_count"] = df["calibration_count"].fillna(0).astype(int)
+    
+    # Convert to dict and ensure no NaN values
+    records = df.to_dict(orient="records")
+    
+    # Clean up any remaining NaN values
+    for record in records:
+        for key, value in record.items():
+            if isinstance(value, float) and (value != value):  # Check for NaN
+                record[key] = None
+    
+    return records
 
-    if "title" not in df.columns:
-        df['title'] = ""
-    if "type" not in df.columns:
-        df['type'] = ""
-    if "impact_weight" not in df.columns:
-        df['impact_weight'] = 0.0
-    if "category" not in df.columns:
-        df['category'] = ""
-    if "description" not in df.columns:
-        df['description'] = ""
 
-    return df[["date", "title", "type", "impact_weight", "category", "description"]].to_dict(orient="records")
+class EventSuggestionRequest(BaseModel):
+    title: str
+    user_selected_type: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[str] = None
+
+
+class EventConfirmationRequest(BaseModel):
+    date: str
+    title: str
+    type: str
+    impact_weight: float
+    description: Optional[str] = None
+    category: Optional[str] = None
+    user_decision: Optional[str] = None  # 'accepted', 'edited', 'rejected', or None for manual entry
+    ai_suggestion: Optional[dict] = None  # Original AI suggestion
+
+
+@app.post("/api/events/suggest")
+def suggest_event(request: EventSuggestionRequest):
+    """
+    AI endpoint to suggest event classification and impact
+    Returns: EventSuggestion with category, impact, confidence, rationale
+    """
+    try:
+        suggestion = event_intelligence.suggest_event_classification(
+            title=request.title,
+            user_selected_type=request.user_selected_type,
+            description=request.description,
+            date=request.date
+        )
+        
+        return {
+            "status": "success",
+            "suggestion": suggestion.dict()
+        }
+    except Exception as e:
+        logger.error(f"Event suggestion error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/events/confirm")
+def confirm_event(request: EventConfirmationRequest):
+    """
+    Save event with user confirmation decision
+    CRITICAL: Rejected events are NOT saved to database
+    """
+    try:
+        # CRITICAL FIX: Reject events must NOT be saved
+        if request.user_decision == 'rejected':
+            return {
+                "status": "rejected",
+                "message": "Event was rejected and not saved to database"
+            }
+        
+        with engine.connect() as conn:
+            # Prepare AI suggestion fields
+            ai_fields = {}
+            if request.ai_suggestion:
+                ai_fields = {
+                    "suggested_category": request.ai_suggestion.get("suggested_category"),
+                    "suggested_impact": request.ai_suggestion.get("suggested_impact"),
+                    "ai_confidence": request.ai_suggestion.get("confidence"),
+                    "ai_rationale": request.ai_suggestion.get("rationale"),
+                }
+            
+            # Insert event (only accepted/edited/manual events)
+            result = conn.execute(
+                text("""
+                    INSERT INTO calendar_events 
+                    (date, title, type, impact_weight, description, category, 
+                     user_decision, suggested_category, suggested_impact, ai_confidence, ai_rationale)
+                    VALUES 
+                    (:date, :title, :type, :impact_weight, :description, :category,
+                     :user_decision, :suggested_category, :suggested_impact, :ai_confidence, :ai_rationale)
+                    RETURNING id
+                """),
+                {
+                    "date": request.date,
+                    "title": request.title,
+                    "type": request.type,
+                    "impact_weight": request.impact_weight,
+                    "description": request.description or "",
+                    "category": request.category or "",
+                    "user_decision": request.user_decision,
+                    "suggested_category": ai_fields.get("suggested_category"),
+                    "suggested_impact": ai_fields.get("suggested_impact"),
+                    "ai_confidence": ai_fields.get("ai_confidence"),
+                    "ai_rationale": ai_fields.get("ai_rationale"),
+                }
+            )
+            
+            event_id = result.fetchone()[0]
+            conn.commit()
+            
+            return {
+                "status": "success",
+                "message": "Event created successfully",
+                "event_id": event_id
+            }
+    except Exception as e:
+        logger.error(f"Event confirmation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/events/{event_id}/calibrate")
+def calibrate_event(event_id: int):
+    """
+    Manually trigger calibration for a past event
+    """
+    try:
+        # Get event details
+        with engine.connect() as conn:
+            event = conn.execute(
+                text("""
+                    SELECT date, type, impact_weight, calibrated_impact
+                    FROM calendar_events
+                    WHERE id = :event_id
+                """),
+                {"event_id": event_id}
+            ).mappings().first()
+            
+            if not event:
+                raise HTTPException(status_code=404, detail="Event not found")
+            
+            event_date = event['date']
+            prior_impact = float(event['calibrated_impact'] or event['impact_weight'] or 0.5)
+        
+        # Calibrate
+        result = event_intelligence.calibrate_event_impact(
+            event_id=event_id,
+            event_date=event_date,
+            prior_impact=prior_impact
+        )
+        
+        if result:
+            return {
+                "status": "success",
+                "calibration": result.dict()
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Calibration failed. Event may not have occurred yet or data is missing."
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Calibration endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/events/{event_id}/history")
+def get_event_calibration_history(event_id: int):
+    """
+    Get calibration history for an event
+    """
+    try:
+        history = event_intelligence.get_calibration_history(event_id)
+        return {
+            "status": "success",
+            "event_id": event_id,
+            "history": history
+        }
+    except Exception as e:
+        logger.error(f"Calibration history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/events/auto-calibrate")
+def auto_calibrate_events(days_back: int = 90):
+    """
+    Automatically calibrate all past events
+    """
+    try:
+        results = event_intelligence.auto_calibrate_past_events(days_back=days_back)
+        return {
+            "status": "success",
+            "message": f"Calibrated {len(results)} events",
+            "results": [r.dict() for r in results]
+        }
+    except Exception as e:
+        logger.error(f"Auto-calibration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/events/{event_id}")
+def update_event(event_id: int, request: EventConfirmationRequest):
+    """
+    Update an existing calendar event
+    """
+    try:
+        with engine.connect() as conn:
+            # Check if event exists
+            result = conn.execute(
+                text("SELECT id FROM calendar_events WHERE id = :event_id"),
+                {"event_id": event_id}
+            ).mappings().first()
+            
+            if not result:
+                raise HTTPException(status_code=404, detail="Event not found")
+            
+            # Prepare AI suggestion fields
+            ai_fields = {}
+            if request.ai_suggestion:
+                ai_fields = {
+                    "suggested_category": request.ai_suggestion.get("suggested_category"),
+                    "suggested_impact": request.ai_suggestion.get("suggested_impact"),
+                    "ai_confidence": request.ai_suggestion.get("confidence"),
+                    "ai_rationale": request.ai_suggestion.get("rationale"),
+                }
+            
+            # Update the event
+            conn.execute(
+                text("""
+                    UPDATE calendar_events
+                    SET date = :date,
+                        title = :title,
+                        type = :type,
+                        impact_weight = :impact_weight,
+                        description = :description,
+                        category = :category,
+                        user_decision = :user_decision,
+                        suggested_category = :suggested_category,
+                        suggested_impact = :suggested_impact,
+                        ai_confidence = :ai_confidence,
+                        ai_rationale = :ai_rationale
+                    WHERE id = :event_id
+                """),
+                {
+                    "event_id": event_id,
+                    "date": request.date,
+                    "title": request.title,
+                    "type": request.type,
+                    "impact_weight": request.impact_weight,
+                    "description": request.description or "",
+                    "category": request.category or "",
+                    "user_decision": request.user_decision,
+                    "suggested_category": ai_fields.get("suggested_category"),
+                    "suggested_impact": ai_fields.get("suggested_impact"),
+                    "ai_confidence": ai_fields.get("ai_confidence"),
+                    "ai_rationale": ai_fields.get("ai_rationale"),
+                }
+            )
+            conn.commit()
+            
+            return {
+                "status": "success",
+                "message": "Event updated successfully",
+                "event_id": event_id
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update event error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/events/{event_id}")
+def delete_event(event_id: int):
+    """
+    Delete a calendar event
+    """
+    try:
+        with engine.connect() as conn:
+            # Check if event exists
+            result = conn.execute(
+                text("SELECT id FROM calendar_events WHERE id = :event_id"),
+                {"event_id": event_id}
+            ).mappings().first()
+            
+            if not result:
+                raise HTTPException(status_code=404, detail="Event not found")
+            
+            # Delete the event
+            conn.execute(
+                text("DELETE FROM calendar_events WHERE id = :event_id"),
+                {"event_id": event_id}
+            )
+            conn.commit()
+            
+            return {
+                "status": "success",
+                "message": "Event deleted successfully",
+                "event_id": event_id
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete event error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/train/{store_id}")
 def train_model(store_id: str, request: Optional[PredictionRequest] = None):
+    """
+    Train Prophet model with improvements:
+    1. Log-transform for better accuracy
+    2. Regressor prior_scale to prevent overfitting
+    3. Optimized seasonality tuning
+    """
     try:
         df = fetch_daily_sales_frame()
         if len(df) < 30:
@@ -603,20 +1066,43 @@ def train_model(store_id: str, request: Optional[PredictionRequest] = None):
 
         df = df.sort_values("ds")
 
+        # CRITICAL FIX: Apply log transform for better accuracy
+        df['y_log'] = np.log1p(df['y'])
+        
+        # Dynamic changepoint_prior_scale based on data variance
+        y_std = df['y'].std()
+        y_mean = df['y'].mean()
+        cv = y_std / y_mean if y_mean > 0 else 0.5
+        
+        # More aggressive changepoints for volatile data
+        changepoint_scale = 0.05 if cv < 0.3 else 0.08 if cv < 0.6 else 0.12
+        
         model = Prophet(
-            yearly_seasonality=True,
-            weekly_seasonality=True,
+            yearly_seasonality=10,  # Higher Fourier order for better yearly patterns
+            weekly_seasonality=10,  # Higher Fourier order for better weekly patterns
             daily_seasonality=False,
-            changepoint_prior_scale=0.07,
+            changepoint_prior_scale=changepoint_scale,
+            seasonality_prior_scale=8.0,  # Moderate seasonality strength
             seasonality_mode="additive"
         )
+        
+        # CRITICAL FIX: Add regressors with prior_scale to prevent overfitting
         active_regressors = []
         for reg in REGRESSOR_COLUMNS:
             if reg in df.columns:
-                model.add_regressor(reg)
+                # Lower prior_scale = less influence, prevents overfitting
+                if 'closure' in reg:
+                    prior_scale = 0.15  # Closure has strong impact
+                elif 'promo' in reg or 'holiday' in reg:
+                    prior_scale = 0.10  # Moderate impact
+                else:
+                    prior_scale = 0.08  # Conservative for other events
+                
+                model.add_regressor(reg, prior_scale=prior_scale, mode='additive')
                 active_regressors.append(reg)
 
-        model.fit(df[["ds", "y", *active_regressors]])
+        # CRITICAL FIX: Train on log-transformed y
+        model.fit(df[["ds", "y_log", *active_regressors]].rename(columns={'y_log': 'y'}))
 
         model_path = f"{MODEL_DIR}/store_{store_id}.json"
         with open(model_path, "w") as f:
@@ -624,9 +1110,11 @@ def train_model(store_id: str, request: Optional[PredictionRequest] = None):
 
         return {
             "status": "success",
-            "message": f"Model trained successfully with {len(df)} days of data",
+            "message": f"Model trained successfully with {len(df)} days of data (log-scale, tuned regressors)",
             "data_points": len(df),
-            "regressors": active_regressors
+            "regressors": active_regressors,
+            "cv": round(cv, 3),
+            "changepoint_scale": round(changepoint_scale, 3)
         }
     except Exception as e:
         logger.error(f"train_model error: {e}")
@@ -686,6 +1174,35 @@ def get_prediction(store_id: str, request: PredictionRequest):
         expected_regressors = list(getattr(model, 'extra_regressors', {}).keys()) if hasattr(model, 'extra_regressors') else []
         future_for_model = future[["ds", *expected_regressors]] if expected_regressors else future[["ds"]]
         forecast = model.predict(future_for_model)
+
+        # CRITICAL FIX: Inverse log transform (expm1) on predictions
+        # Check if this is a log-scale model by looking at prediction magnitude
+        try:
+            max_pred = float(forecast['yhat'].max())
+            avg_historical = float(historical_df['y'].mean()) if not historical_df.empty else 100.0
+            
+            # If predictions are much smaller than historical average, it's likely log-scale
+            # Log of 100 = 4.6, log of 1000 = 6.9, log of 10000 = 9.2
+            # So if max prediction < 50 and historical avg > 50, it's definitely log-scale
+            if max_pred < 50 and avg_historical > 50:
+                # Log-scale model detected, apply inverse transform
+                forecast['yhat'] = np.expm1(forecast['yhat'].clip(-10, 20))
+                forecast['yhat_lower'] = np.expm1(forecast['yhat_lower'].clip(-10, 20))
+                forecast['yhat_upper'] = np.expm1(forecast['yhat_upper'].clip(-10, 20))
+                logger.info(f"Applied inverse log transform (max_pred={max_pred:.2f}, avg_hist={avg_historical:.2f})")
+            elif max_pred < 20:
+                # Predictions look like log-scale even if historical is small, apply transform
+                forecast['yhat'] = np.expm1(forecast['yhat'].clip(-10, 20))
+                forecast['yhat_lower'] = np.expm1(forecast['yhat_lower'].clip(-10, 20))
+                forecast['yhat_upper'] = np.expm1(forecast['yhat_upper'].clip(-10, 20))
+                logger.info(f"Applied inverse log transform (max_pred={max_pred:.2f})")
+            else:
+                # Likely an old non-log model, use values as-is
+                logger.warning(f"Model appears to be non-log scale (max_pred={max_pred:.2f}). Consider retraining.")
+                pass
+        except Exception as e:
+            logger.error(f"Inverse transform error: {e}. Using predictions as-is.")
+            pass
 
         # FIXED: Bug 3 - Check for empty forecast
         if forecast.empty:

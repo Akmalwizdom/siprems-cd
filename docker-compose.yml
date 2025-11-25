@@ -1,32 +1,17 @@
 version: '3.8'
 
 services:
-  # Database PostgreSQL
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: siprems_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
-
   # Backend API (Python Prophet)
+  # Now connects to Supabase cloud database
   backend:
     build: ./backend
     volumes:
       - ./backend:/app
       - model_data:/app/models # Persist model files
-    environment:
-      DATABASE_URL: postgresql://user:password@db:5432/siprems_db
-      GEMINI_API_KEY: AIzaSyAijX_7tW8FN9_x3sfeVmVGGJ_K1Pjh8g0
+    env_file:
+      - ./backend/.env
     ports:
       - "8000:8000"
-    depends_on:
-      - db
 
   # Frontend (React)
   frontend:
@@ -39,5 +24,4 @@ services:
       - backend
 
 volumes:
-  postgres_data:
   model_data:
