@@ -94,20 +94,29 @@ FORECAST_HORIZON_DAYS = 84
 MIN_FORECAST_DAYS = 1
 MAX_FORECAST_DAYS = 365  # FIXED: Bug 2 - Added max limit
 
-def calculate_forecast_accuracy(historical_df: pd.DataFrame, model: Prophet) -> float:
+def calculate_forecast_accuracy(historical_df: pd.DataFrame, model: Prophet, meta: Optional[Dict] = None) -> float:
     """
     Calculate prediction accuracy using MAPE on last 14 days of historical data
-    CRITICAL: Accounts for log-scale model predictions
+    CRITICAL FIX: Uses metadata to properly handle log-scale transformations
+    
+    Args:
+        historical_df: Historical sales data
+        model: Trained Prophet model
+        meta: Model metadata containing log_transform flag
+    
+    Returns:
+        Accuracy percentage (0-100)
     """
     if len(historical_df) < 30:
+        logger.warning("Accuracy: Insufficient data (< 30 days)")
         return 0.0
 
     validation_days = 14
     train_df = historical_df.iloc[:-validation_days]
     test_df = historical_df.iloc[-validation_days:]
 
+    # Build validation dataset with regressors
     future_validation = pd.DataFrame({'ds': test_df['ds']})
-
     for reg in REGRESSOR_COLUMNS:
         if reg in test_df.columns:
             future_validation[reg] = test_df[reg].values
@@ -115,29 +124,37 @@ def calculate_forecast_accuracy(historical_df: pd.DataFrame, model: Prophet) -> 
             future_validation[reg] = 0.0
 
     try:
+        # Get predictions from model (in training scale)
         forecast = model.predict(future_validation)
 
-        # CRITICAL FIX: Inverse transform log predictions
-        # Add safety check for backward compatibility
-        try:
-            if forecast['yhat'].max() < 20 and forecast['yhat'].min() > -5:
-                predicted = np.expm1(forecast['yhat'].values.clip(-10, 20))
-            else:
-                predicted = forecast['yhat'].values
-        except:
+        # CRITICAL FIX: Use metadata to determine if inverse transform is needed
+        use_log_transform = meta and meta.get('log_transform', False)
+        
+        if use_log_transform:
+            # Model was trained on log scale, inverse transform predictions to original scale
+            predicted = np.expm1(forecast['yhat'].values.clip(-10, 20))
+            logger.info(f"Accuracy: Applied inverse log transform (metadata: log_transform=True)")
+        else:
+            # Model was trained on original scale
             predicted = forecast['yhat'].values
-            
+            logger.info(f"Accuracy: No inverse transform (metadata: log_transform=False)")
+        
+        # Actuals are always in original scale
         actual = test_df['y'].values
 
+        # Calculate MAPE (Mean Absolute Percentage Error)
         mask = actual != 0
         if not mask.any():
+            logger.warning("Accuracy: All actual values are zero")
             return 0.0
 
         mape = np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100
         accuracy = max(0, min(100, 100 - mape))
+        
+        logger.info(f"Accuracy: MAPE={mape:.2f}%, Accuracy={accuracy:.1f}% (validation_days={validation_days})")
         return round(accuracy, 1)
     except Exception as e:
-        logger.error(f"Accuracy calculation error: {e}")
+        logger.error(f"Accuracy calculation error: {e}", exc_info=True)
         return 0.0
 
 
@@ -1253,7 +1270,9 @@ def get_prediction(store_id: str, request: PredictionRequest):
             if train_response.get("status") != "success":
                 return train_response
             model, meta = load_model_with_meta(store_id)
-        accuracy = calculate_forecast_accuracy(historical_df, model)
+        
+        # CRITICAL FIX: Pass metadata to accuracy calculation
+        accuracy = calculate_forecast_accuracy(historical_df, model, meta)
 
         db_events_df = load_calendar_events_df()
         request_event_dicts = normalize_request_events(request.events) if request and request.events else []
@@ -1274,34 +1293,18 @@ def get_prediction(store_id: str, request: PredictionRequest):
         future_for_model = future[["ds", *expected_regressors]] if expected_regressors else future[["ds"]]
         forecast = model.predict(future_for_model)
 
-        # CRITICAL FIX: Inverse log transform (expm1) on predictions
-        # Check if this is a log-scale model by looking at prediction magnitude
-        try:
-            max_pred = float(forecast['yhat'].max())
-            avg_historical = float(historical_df['y'].mean()) if not historical_df.empty else 100.0
-            
-            # If predictions are much smaller than historical average, it's likely log-scale
-            # Log of 100 = 4.6, log of 1000 = 6.9, log of 10000 = 9.2
-            # So if max prediction < 50 and historical avg > 50, it's definitely log-scale
-            if max_pred < 50 and avg_historical > 50:
-                # Log-scale model detected, apply inverse transform
-                forecast['yhat'] = np.expm1(forecast['yhat'].clip(-10, 20))
-                forecast['yhat_lower'] = np.expm1(forecast['yhat_lower'].clip(-10, 20))
-                forecast['yhat_upper'] = np.expm1(forecast['yhat_upper'].clip(-10, 20))
-                logger.info(f"Applied inverse log transform (max_pred={max_pred:.2f}, avg_hist={avg_historical:.2f})")
-            elif max_pred < 20:
-                # Predictions look like log-scale even if historical is small, apply transform
-                forecast['yhat'] = np.expm1(forecast['yhat'].clip(-10, 20))
-                forecast['yhat_lower'] = np.expm1(forecast['yhat_lower'].clip(-10, 20))
-                forecast['yhat_upper'] = np.expm1(forecast['yhat_upper'].clip(-10, 20))
-                logger.info(f"Applied inverse log transform (max_pred={max_pred:.2f})")
-            else:
-                # Likely an old non-log model, use values as-is
-                logger.warning(f"Model appears to be non-log scale (max_pred={max_pred:.2f}). Consider retraining.")
-                pass
-        except Exception as e:
-            logger.error(f"Inverse transform error: {e}. Using predictions as-is.")
-            pass
+        # CRITICAL FIX: Use metadata to determine if inverse transform is needed
+        use_log_transform = meta and meta.get('log_transform', False)
+        
+        if use_log_transform:
+            # Model was trained on log scale, inverse transform predictions to original scale
+            forecast['yhat'] = np.expm1(forecast['yhat'].clip(-10, 20))
+            forecast['yhat_lower'] = np.expm1(forecast['yhat_lower'].clip(-10, 20))
+            forecast['yhat_upper'] = np.expm1(forecast['yhat_upper'].clip(-10, 20))
+            logger.info(f"Prediction: Applied inverse log transform (metadata: log_transform=True)")
+        else:
+            # Model was trained on original scale
+            logger.info(f"Prediction: No inverse transform (metadata: log_transform=False)")
 
         # FIXED: Bug 3 - Check for empty forecast
         if forecast.empty:
