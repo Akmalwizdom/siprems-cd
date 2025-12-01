@@ -30,7 +30,13 @@ interface CalibrationHistory {
   method: string;
 }
 
-const eventTypeConfig = {
+const eventTypeConfig: Record<string, {
+  color: string;
+  label: string;
+  bgLight: string;
+  textColor: string;
+  borderColor: string;
+}> = {
   promotion: { 
     color: 'bg-blue-500', 
     label: 'Promotion', 
@@ -59,6 +65,12 @@ const eventTypeConfig = {
     textColor: 'text-green-700', 
     borderColor: 'border-green-200' 
   },
+};
+
+// Helper function to safely get event config
+const getEventConfig = (eventType: string | undefined) => {
+  if (!eventType) return eventTypeConfig['event']; // Default fallback
+  return eventTypeConfig[eventType] || eventTypeConfig['event'];
 };
 
 export function CalendarImproved() {
@@ -472,7 +484,7 @@ export function CalendarImproved() {
             {dateEvents.map((event: any) => (
               <div
                 key={event.id}
-                className={`${eventTypeConfig[event.type].color} text-white px-2 py-1 rounded text-xs relative group`}
+                className={`${getEventConfig(event.type).color} text-white px-2 py-1 rounded text-xs relative group`}
               >
                 <div className="flex items-center justify-between gap-1">
                   <span className="flex-1 truncate" onClick={(e) => {
@@ -670,8 +682,8 @@ export function CalendarImproved() {
                       <div className="flex items-center gap-4 text-sm">
                         <div>
                           <span className="text-slate-600">Category: </span>
-                          <span className={`font-medium px-2 py-1 rounded ${eventTypeConfig[aiSuggestion.suggested_category as keyof typeof eventTypeConfig]?.bgLight} ${eventTypeConfig[aiSuggestion.suggested_category as keyof typeof eventTypeConfig]?.textColor}`}>
-                            {eventTypeConfig[aiSuggestion.suggested_category as keyof typeof eventTypeConfig]?.label}
+                          <span className={`font-medium px-2 py-1 rounded ${getEventConfig(aiSuggestion.suggested_category).bgLight} ${getEventConfig(aiSuggestion.suggested_category).textColor}`}>
+                            {getEventConfig(aiSuggestion.suggested_category).label}
                           </span>
                         </div>
                         <div>
@@ -816,7 +828,7 @@ export function CalendarImproved() {
                 <p className="text-sm text-slate-600 mb-2">You are creating:</p>
                 <div className="bg-slate-50 rounded-lg p-4 space-y-2">
                   <div><span className="font-medium">Title:</span> {formData.title}</div>
-                  <div><span className="font-medium">Type:</span> {eventTypeConfig[formData.type].label}</div>
+                  <div><span className="font-medium">Type:</span> {getEventConfig(formData.type).label}</div>
                   <div><span className="font-medium">Impact:</span> {formData.impact?.toFixed(2) || 'Default'}</div>
                   <div><span className="font-medium">Decision:</span> {userDecision?.toUpperCase()}</div>
                 </div>
@@ -862,7 +874,7 @@ export function CalendarImproved() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-slate-600">Category:</span>
-                    <span className="ml-2 font-medium">{eventTypeConfig[selectedEvent.type as keyof typeof eventTypeConfig]?.label}</span>
+                    <span className="ml-2 font-medium">{getEventConfig(selectedEvent.type).label}</span>
                   </div>
                   <div>
                     <span className="text-slate-600">Impact Weight:</span>

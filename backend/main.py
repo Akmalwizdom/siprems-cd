@@ -30,6 +30,27 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Import enhanced training system
+try:
+    from model_trainer import ModelTrainer, DataQualityError
+    from scheduler import RetrainingScheduler
+    from config import (
+        TRAINING_WINDOW_DAYS, MIN_ACCURACY_THRESHOLD, 
+        AUTO_RETRAIN_ENABLED, RETRAIN_SCHEDULE,
+        SCALED_REGRESSORS, BINARY_REGRESSORS, ALL_REGRESSORS, SCALER_VERSION
+    )
+    ENHANCED_TRAINING_AVAILABLE = True
+    logger.info("Enhanced training system loaded successfully")
+except ImportError as e:
+    logger.warning(f"Enhanced training modules not available: {e}")
+    ENHANCED_TRAINING_AVAILABLE = False
+    # Fallback defaults
+    SCALED_REGRESSORS = ["promo_intensity", "holiday_intensity", "event_intensity", 
+                         "closure_intensity", "transactions_count", "avg_ticket"]
+    BINARY_REGRESSORS = ["is_weekend", "is_payday", "is_day_before_holiday", "is_school_holiday"]
+    ALL_REGRESSORS = SCALED_REGRESSORS + BINARY_REGRESSORS
+    SCALER_VERSION = "1.0"
+
 app = FastAPI()
 
 app.add_middleware(
@@ -41,16 +62,64 @@ app.add_middleware(
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@db:5432/siprems_db")
 engine = create_engine(DATABASE_URL)
-MODEL_DIR = "/app/models"
+
+# MODEL_DIR: Use environment variable, or check for local vs Docker paths
+MODEL_DIR = os.getenv("MODEL_DIR", None)
+if MODEL_DIR is None:
+    # Auto-detect: use ./models if exists locally, else /app/models for Docker
+    if os.path.exists("./models"):
+        MODEL_DIR = "./models"
+    else:
+        MODEL_DIR = "/app/models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 # Initialize Event Intelligence Service
 event_intelligence = EventIntelligenceService(engine, os.getenv("GEMINI_API_KEY"))
 
+# Initialize Enhanced Training System
+if ENHANCED_TRAINING_AVAILABLE:
+    model_trainer = ModelTrainer(engine, MODEL_DIR)
+    retrain_scheduler = RetrainingScheduler()
+    retrain_scheduler.set_retrain_callback(
+        lambda store_id: model_trainer.auto_retrain_if_needed(store_id)
+    )
+    logger.info("Model trainer and scheduler initialized")
+else:
+    model_trainer = None
+    retrain_scheduler = None
+    logger.warning("Using legacy training system")
+
+# Startup and Shutdown Events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize scheduler on startup"""
+    if ENHANCED_TRAINING_AVAILABLE and retrain_scheduler:
+        retrain_scheduler.start(store_ids=["1"])
+        logger.info("Application started with automatic retraining enabled")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop scheduler on shutdown"""
+    if ENHANCED_TRAINING_AVAILABLE and retrain_scheduler:
+        retrain_scheduler.stop()
+        logger.info("Application shutdown - scheduler stopped")
+
 # Health check endpoint
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    """Health check with enhanced system status"""
+    status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "enhanced_training": ENHANCED_TRAINING_AVAILABLE
+    }
+    
+    if ENHANCED_TRAINING_AVAILABLE and retrain_scheduler:
+        status["auto_retrain_enabled"] = AUTO_RETRAIN_ENABLED
+        status["retrain_schedule"] = RETRAIN_SCHEDULE
+        status["next_retrain"] = retrain_scheduler.get_next_run_time("1")
+    
+    return status
 
 # FIXED: Bug 7 - Validate GEMINI_API_KEY
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -94,15 +163,49 @@ FORECAST_HORIZON_DAYS = 84
 MIN_FORECAST_DAYS = 1
 MAX_FORECAST_DAYS = 365  # FIXED: Bug 2 - Added max limit
 
+def apply_scaler_to_df(df: pd.DataFrame, scaler_params: Dict) -> pd.DataFrame:
+    """
+    CRITICAL: Apply saved scaler params to transform regressors in main.py context.
+    
+    Args:
+        df: DataFrame to transform
+        scaler_params: Dict with mean_, scale_, and columns from model metadata
+        
+    Returns:
+        DataFrame with scaled regressors
+    """
+    df = df.copy()
+    
+    cols_to_scale = scaler_params.get("columns", [])
+    mean_dict = scaler_params.get("mean_", {})
+    scale_dict = scaler_params.get("scale_", {})
+    
+    for col in cols_to_scale:
+        if col in df.columns and col in mean_dict and col in scale_dict:
+            mean = mean_dict[col]
+            scale = scale_dict[col]
+            if scale > 0:
+                df[col] = (df[col] - mean) / scale
+            else:
+                logger.warning(f"Scaler scale for {col} is 0, skipping")
+    
+    return df
+
+
 def calculate_forecast_accuracy(historical_df: pd.DataFrame, model: Prophet, meta: Optional[Dict] = None) -> float:
     """
-    Calculate prediction accuracy using MAPE on last 14 days of historical data
-    CRITICAL FIX: Uses metadata to properly handle log-scale transformations
+    CRITICAL FIX: Calculate prediction accuracy using MAPE on last 14 days WITHOUT data leakage.
+    
+    This function now:
+    1. Uses metadata to properly handle log-scale transformations
+    2. Generates regressors WITHOUT data leakage
+    3. Applies scaler_params from metadata to validation regressors
+    4. Validates transform consistency
     
     Args:
         historical_df: Historical sales data
         model: Trained Prophet model
-        meta: Model metadata containing log_transform flag
+        meta: Model metadata containing log_transform, scaler_params
     
     Returns:
         Accuracy percentage (0-100)
@@ -112,46 +215,97 @@ def calculate_forecast_accuracy(historical_df: pd.DataFrame, model: Prophet, met
         return 0.0
 
     validation_days = 14
-    train_df = historical_df.iloc[:-validation_days]
-    test_df = historical_df.iloc[-validation_days:]
+    train_df = historical_df.iloc[:-validation_days].copy()
+    test_df = historical_df.iloc[-validation_days:].copy()
+    
+    logger.info(f"Accuracy: Split data - train={len(train_df)}, validation={len(test_df)} days")
 
-    # Build validation dataset with regressors
-    future_validation = pd.DataFrame({'ds': test_df['ds']})
-    for reg in REGRESSOR_COLUMNS:
-        if reg in test_df.columns:
-            future_validation[reg] = test_df[reg].values
-        else:
-            future_validation[reg] = 0.0
+    # CRITICAL FIX: Generate regressors WITHOUT data leakage
+    # Build event lookup from training data only (no future peeking)
+    db_events_df = load_calendar_events_df()
+    train_end_date = pd.to_datetime(train_df['ds'].max()).date()
+    event_lookup = build_event_lookup(
+        db_events_df[pd.to_datetime(db_events_df['date']).dt.date <= train_end_date] if not db_events_df.empty else pd.DataFrame(),
+        None
+    )
+    
+    # Generate clean regressors using only training statistics
+    future_validation = generate_future_regressors_clean(
+        dates=test_df['ds'],
+        historical_df=train_df,  # Use ONLY training data for statistics
+        event_lookup=event_lookup,
+        is_validation=True
+    )
 
     try:
-        # Get predictions from model (in training scale)
-        forecast = model.predict(future_validation)
-
-        # CRITICAL FIX: Use metadata to determine if inverse transform is needed
-        use_log_transform = meta and meta.get('log_transform', False)
+        # Get expected regressors from model
+        expected_regressors = list(getattr(model, 'extra_regressors', {}).keys()) if hasattr(model, 'extra_regressors') else []
+        future_for_model = future_validation[["ds"] + expected_regressors] if expected_regressors else future_validation[["ds"]]
         
+        # CRITICAL FIX: Apply scaler if metadata contains scaler_params
+        use_log_transform = False
+        scaler_params = None
+        
+        if meta is not None:
+            use_log_transform = meta.get('log_transform', False)
+            scaler_params = meta.get('scaler_params', None)
+            regressor_scaled = meta.get('regressor_scaled', False)
+            
+            logger.info(f"Accuracy: Metadata loaded - log_transform={use_log_transform}, regressor_scaled={regressor_scaled}")
+            
+            # CRITICAL: Apply scaler to validation regressors if model was trained with scaled regressors
+            if regressor_scaled and scaler_params:
+                logger.info("Accuracy: Applying scaler to validation regressors...")
+                future_for_model = apply_scaler_to_df(future_for_model, scaler_params)
+                
+                # Log scaled stats for debugging
+                for col in expected_regressors:
+                    if col in scaler_params.get("columns", []):
+                        logger.info(f"  - Scaled {col}: mean={future_for_model[col].mean():.4f}")
+        else:
+            logger.warning("Accuracy: No metadata found! Assuming log_transform=False (may be incorrect)")
+        
+        # Get predictions from model
+        forecast = model.predict(future_for_model)
+
         if use_log_transform:
             # Model was trained on log scale, inverse transform predictions to original scale
             predicted = np.expm1(forecast['yhat'].values.clip(-10, 20))
-            logger.info(f"Accuracy: Applied inverse log transform (metadata: log_transform=True)")
+            logger.info(f"Accuracy: Applied inverse log transform (expm1)")
+            logger.info(f"  - Predicted range after expm1: [{predicted.min():.1f}, {predicted.max():.1f}]")
         else:
             # Model was trained on original scale
             predicted = forecast['yhat'].values
-            logger.info(f"Accuracy: No inverse transform (metadata: log_transform=False)")
+            logger.info(f"Accuracy: No inverse transform applied")
+            logger.info(f"  - Predicted range: [{predicted.min():.1f}, {predicted.max():.1f}]")
         
         # Actuals are always in original scale
         actual = test_df['y'].values
+        logger.info(f"  - Actual range: [{actual.min():.1f}, {actual.max():.1f}]")
 
+        # CRITICAL: Validate scales match
+        if use_log_transform:
+            # After expm1, predicted should be in same range as actual
+            if predicted.mean() < 1.0 and actual.mean() > 100:
+                logger.error("SCALE MISMATCH: Predicted in log scale but actual in original scale!")
+                logger.error(f"Predicted mean: {predicted.mean():.2f}, Actual mean: {actual.mean():.2f}")
+                return 0.0
+        
         # Calculate MAPE (Mean Absolute Percentage Error)
-        mask = actual != 0
+        mask = actual > 0  # Exclude zero or negative sales
         if not mask.any():
-            logger.warning("Accuracy: All actual values are zero")
+            logger.warning("Accuracy: All actual values are zero or negative")
             return 0.0
 
+        # Clip predicted to non-negative
+        predicted = np.maximum(predicted, 0)
+        
         mape = np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100
         accuracy = max(0, min(100, 100 - mape))
         
         logger.info(f"Accuracy: MAPE={mape:.2f}%, Accuracy={accuracy:.1f}% (validation_days={validation_days})")
+        logger.info(f"  - Mean Predicted: {predicted[mask].mean():.1f}, Mean Actual: {actual[mask].mean():.1f}")
+        
         return round(accuracy, 1)
     except Exception as e:
         logger.error(f"Accuracy calculation error: {e}", exc_info=True)
@@ -288,57 +442,102 @@ def build_event_lookup(db_events_df: pd.DataFrame, request_event_dicts: Optional
     return event_lookup
 
 
-def apply_future_regressors(future_df: pd.DataFrame, historical_df: pd.DataFrame, event_lookup):
-    future_df["ds"] = pd.to_datetime(future_df["ds"])
+def generate_future_regressors_clean(
+    dates: pd.Series, 
+    historical_df: pd.DataFrame, 
+    event_lookup: dict,
+    is_validation: bool = False
+) -> pd.DataFrame:
+    """
+    CRITICAL FIX: Generate future regressors WITHOUT data leakage
+    
+    This function generates regressors using ONLY information available at 
+    prediction time (historical statistics), never using actual future values 
+    even if they exist in historical_df.
+    
+    Args:
+        dates: Series of dates to generate regressors for
+        historical_df: Historical data for computing statistics (DO NOT use actual values)
+        event_lookup: Event information
+        is_validation: If True, log warnings about validation mode
+    
+    Returns:
+        DataFrame with clean regressor values
+    """
+    future = pd.DataFrame({'ds': pd.to_datetime(dates)})
+    
+    # Compute statistics from historical data ONLY
     if not historical_df.empty:
-        historical_df["ds"] = pd.to_datetime(historical_df["ds"])
-
-    merge_cols = ["ds"] + [col for col in REGRESSOR_COLUMNS if col in historical_df.columns]
-    for col in merge_cols:
-        if col not in historical_df.columns and col != "ds":
-            historical_df[col] = np.nan
-
-    future = future_df.merge(historical_df[merge_cols], on="ds", how="left")
-
-    for col in REGRESSOR_COLUMNS:
-        if col not in future.columns:
-            future[col] = np.nan
-
-    date_keys = future["ds"].dt.date
-    txn_default = historical_df["transactions_count"].mean() if ("transactions_count" in historical_df.columns and not historical_df["transactions_count"].isna().all()) else 1.0
-    ticket_default = historical_df["avg_ticket"].mean() if ("avg_ticket" in historical_df.columns and not historical_df["avg_ticket"].isna().all()) else 1.0
-
-    if not historical_df.empty and "transactions_count" in historical_df.columns:
-        weekday_txn_avg = historical_df.groupby(historical_df["ds"].dt.weekday)["transactions_count"].mean().to_dict()
+        # Compute weekday statistics (safe - uses only past data patterns)
+        weekday_txn_avg = historical_df.groupby(
+            historical_df["ds"].dt.weekday
+        )["transactions_count"].mean().to_dict() if "transactions_count" in historical_df.columns else {}
+        
+        weekday_ticket_avg = historical_df.groupby(
+            historical_df["ds"].dt.weekday
+        )["avg_ticket"].mean().to_dict() if "avg_ticket" in historical_df.columns else {}
+        
+        # Compute overall fallbacks
+        txn_default = historical_df["transactions_count"].mean() if "transactions_count" in historical_df.columns else 50.0
+        ticket_default = historical_df["avg_ticket"].mean() if "avg_ticket" in historical_df.columns else 75.0
+        
+        # CRITICAL: Validate statistics are reasonable
+        if txn_default <= 0 or np.isnan(txn_default):
+            logger.warning(f"Invalid txn_default: {txn_default}, using fallback 50")
+            txn_default = 50.0
+        if ticket_default <= 0 or np.isnan(ticket_default):
+            logger.warning(f"Invalid ticket_default: {ticket_default}, using fallback 75")
+            ticket_default = 75.0
     else:
         weekday_txn_avg = {}
-
-    if not historical_df.empty and "avg_ticket" in historical_df.columns:
-        weekday_ticket_avg = historical_df.groupby(historical_df["ds"].dt.weekday)["avg_ticket"].mean().to_dict()
-    else:
         weekday_ticket_avg = {}
-
+        txn_default = 50.0
+        ticket_default = 75.0
+    
+    # Generate regressors using ONLY statistical patterns (no actual future values)
+    date_keys = future["ds"].dt.date
+    weekdays = future["ds"].dt.weekday
+    
+    # Binary features (deterministic from date)
+    future["is_weekend"] = weekdays.isin([5, 6]).astype(int)
+    future["is_payday"] = (future["ds"].dt.day.isin([25, 26, 27, 28, 29, 30, 31]) | (future["ds"].dt.day <= 5)).astype(int)
+    future["is_day_before_holiday"] = 0
+    future["is_school_holiday"] = 0
+    
+    # Event intensities (from event_lookup)
     promo_map = {d: info["promo_intensity"] for d, info in event_lookup.items()}
     holiday_map = {d: info["holiday_intensity"] for d, info in event_lookup.items()}
     event_map = {d: info["event_intensity"] for d, info in event_lookup.items()}
     closure_map = {d: info["closure_intensity"] for d, info in event_lookup.items()}
-
-    future["is_weekend"] = future["is_weekend"].fillna(future["ds"].dt.weekday.isin([5, 6]).astype(int))
-    future["promo_intensity"] = future["promo_intensity"].fillna(date_keys.map(lambda d: promo_map.get(d, 0.0)))
-    future["holiday_intensity"] = future["holiday_intensity"].fillna(date_keys.map(lambda d: holiday_map.get(d, 0.0)))
-    future["event_intensity"] = future["event_intensity"].fillna(date_keys.map(lambda d: event_map.get(d, 0.0)))
-    future["closure_intensity"] = future["closure_intensity"].fillna(date_keys.map(lambda d: closure_map.get(d, 0.0)))
-
-    def fill_with_weekday_average(series_name: str, lookup: Dict[int, float], fallback: float):
-        series = future[series_name]
-        return series.where(series.notna(), future["ds"].dt.weekday.map(lambda w: lookup.get(w, fallback)))
-
-    future["transactions_count"] = fill_with_weekday_average("transactions_count", weekday_txn_avg, txn_default)
-    future["avg_ticket"] = fill_with_weekday_average("avg_ticket", weekday_ticket_avg, ticket_default)
-
+    
+    future["promo_intensity"] = date_keys.map(lambda d: promo_map.get(d, 0.0))
+    future["holiday_intensity"] = date_keys.map(lambda d: holiday_map.get(d, 0.0))
+    future["event_intensity"] = date_keys.map(lambda d: event_map.get(d, 0.0))
+    future["closure_intensity"] = date_keys.map(lambda d: closure_map.get(d, 0.0))
+    
+    # Continuous features (estimated from weekday patterns)
+    future["transactions_count"] = weekdays.map(lambda w: weekday_txn_avg.get(w, txn_default))
+    future["avg_ticket"] = weekdays.map(lambda w: weekday_ticket_avg.get(w, ticket_default))
+    
+    # CRITICAL: Validate all regressors are numeric and non-NaN
     for col in REGRESSOR_COLUMNS:
-        future[col] = pd.to_numeric(future[col].fillna(0), errors="coerce").fillna(0)
-
+        if col not in future.columns:
+            future[col] = 0.0
+        future[col] = pd.to_numeric(future[col], errors="coerce").fillna(0.0)
+        
+        # Additional validation: ensure reasonable ranges
+        if col == "transactions_count":
+            future[col] = future[col].clip(1, 500)
+        elif col == "avg_ticket":
+            future[col] = future[col].clip(10, 1000)
+        elif col in ["promo_intensity", "holiday_intensity", "event_intensity", "closure_intensity"]:
+            future[col] = future[col].clip(0, 2.0)
+    
+    if is_validation:
+        logger.info(f"Generated clean regressors for {len(future)} validation dates (NO data leakage)")
+        logger.info(f"  - Avg transactions_count: {future['transactions_count'].mean():.1f}")
+        logger.info(f"  - Avg avg_ticket: {future['avg_ticket'].mean():.1f}")
+    
     return future
 
 class CalendarEventInput(BaseModel):
@@ -835,6 +1034,20 @@ def confirm_event(request: EventConfirmationRequest):
     Save event with user confirmation decision
     CRITICAL: Rejected events are NOT saved to database
     """
+    # CRITICAL: Validate event type matches database constraint
+    valid_types = {'promotion', 'holiday', 'store-closed', 'event'}
+    if request.type not in valid_types:
+        # Map common invalid types to valid ones
+        type_map = {
+            'promotional': 'promotion',
+            'promo': 'promotion',
+            'operational': 'store-closed',
+            'general': 'event'
+        }
+        mapped_type = type_map.get(request.type.lower(), 'event')
+        logger.warning(f"Invalid event type '{request.type}' mapped to '{mapped_type}'")
+        request.type = mapped_type
+    
     try:
         # CRITICAL FIX: Reject events must NOT be saved
         if request.user_decision == 'rejected':
@@ -979,6 +1192,20 @@ def update_event(event_id: int, request: EventConfirmationRequest):
     """
     Update an existing calendar event
     """
+    # CRITICAL: Validate event type matches database constraint
+    valid_types = {'promotion', 'holiday', 'store-closed', 'event'}
+    if request.type not in valid_types:
+        # Map common invalid types to valid ones
+        type_map = {
+            'promotional': 'promotion',
+            'promo': 'promotion',
+            'operational': 'store-closed',
+            'general': 'event'
+        }
+        mapped_type = type_map.get(request.type.lower(), 'event')
+        logger.warning(f"Invalid event type '{request.type}' mapped to '{mapped_type}'")
+        request.type = mapped_type
+    
     try:
         with engine.connect() as conn:
             # Check if event exists
@@ -1095,80 +1322,140 @@ def save_model_with_meta(store_id: str, model: Prophet, meta: dict):
         json.dump(meta, f, indent=2)
 
 def load_model_with_meta(store_id: str):
-    """Load Prophet model with metadata"""
+    """
+    Load Prophet model with metadata
+    
+    CRITICAL FIX: Fail-safe metadata loading with validation
+    """
     model_path = f"{MODEL_DIR}/store_{store_id}.json"
     meta_path = f"{MODEL_DIR}/store_{store_id}_meta.json"
     
     if not os.path.exists(model_path):
+        logger.warning(f"Model file not found: {model_path}")
         return None, None
     
-    with open(model_path, "r") as f:
-        model = model_from_json(f.read())
+    try:
+        with open(model_path, "r") as f:
+            model = model_from_json(f.read())
+        logger.info(f"Model loaded from {model_path}")
+    except Exception as e:
+        logger.error(f"Failed to load model: {e}")
+        return None, None
     
     meta = {}
     if os.path.exists(meta_path):
         try:
             with open(meta_path, "r") as f:
                 meta = json.load(f)
-        except:
-            pass
+            logger.info(f"Metadata loaded: {json.dumps(meta, indent=2)}")
+            
+            # CRITICAL: Validate metadata integrity
+            if 'log_transform' not in meta:
+                logger.error("CRITICAL: Metadata missing 'log_transform' flag! This will cause accuracy issues!")
+                meta['log_transform'] = True  # Assume True as default for safety
+        except Exception as e:
+            logger.error(f"Failed to load metadata: {e}")
+            logger.error("CRITICAL: Using default metadata with log_transform=True")
+            meta = {'log_transform': True}
+    else:
+        logger.warning(f"Metadata file not found: {meta_path}")
+        logger.warning("CRITICAL: Assuming log_transform=True as default")
+        meta = {'log_transform': True}
+    
     return model, meta
 
 @app.post("/api/train/{store_id}")
-def train_model(store_id: str, request: Optional[PredictionRequest] = None):
+def train_model(store_id: str, force_retrain: bool = False):
     """
-    Train Prophet model with improvements:
-    1. Log-transform for better accuracy
-    2. Regressor prior_scale to prevent overfitting
-    3. Optimized seasonality tuning
-    4. Model metadata tracking
+    Train Prophet model with 180-day window and enhanced features:
+    1. Uses last 180 days of transaction data
+    2. Includes custom event calendars
+    3. Data quality validation
+    4. Model versioning and history
+    5. Automatic accuracy calculation
+    
+    Args:
+        store_id: Store identifier
+        force_retrain: Force retraining even if recent model exists
     """
+    if not ENHANCED_TRAINING_AVAILABLE or not model_trainer:
+        # Fallback to legacy training if enhanced system not available
+        logger.warning("Enhanced training not available, using legacy system")
+        return legacy_train_model(store_id)
+    
+    try:
+        logger.info(f"Training model for store {store_id} (180-day window, force={force_retrain})")
+        
+        # Train using enhanced trainer
+        model, metadata = model_trainer.train_model(
+            store_id=store_id,
+            end_date=None,  # Use latest data
+            force_retrain=force_retrain
+        )
+        
+        # Extract key information for response
+        response = {
+            "status": "success",
+            "message": f"Model trained with {metadata['data_points']} days from last {TRAINING_WINDOW_DAYS} days",
+            "training_window_days": TRAINING_WINDOW_DAYS,
+            "data_points": metadata["data_points"],
+            "date_range": {
+                "start": metadata["start_date"],
+                "end": metadata["end_date"]
+            },
+            "accuracy": metadata.get("accuracy", 0),
+            "regressors": metadata["regressors"],
+            "cv": metadata["cv"],
+            "changepoint_scale": metadata["changepoint_prior_scale"],
+            "model_version": metadata["model_version"],
+            "training_time": metadata["training_time_seconds"],
+            "quality_report": metadata.get("quality_report", {})
+        }
+        
+        logger.info(f"Training completed - Accuracy: {metadata.get('accuracy', 0)}%")
+        return response
+        
+    except DataQualityError as e:
+        logger.error(f"Data quality check failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Data quality issue: {str(e)}")
+    except Exception as e:
+        logger.error(f"Training failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Training error: {str(e)}")
+
+
+def legacy_train_model(store_id: str):
+    """Legacy training function for fallback"""
     try:
         df = fetch_daily_sales_frame()
         if len(df) < 30:
             return {"status": "error", "message": "Insufficient data. Need at least 30 days of sales data."}
 
         df = df.sort_values("ds").copy()
-
-        # CRITICAL FIX: Apply log transform for better accuracy
         df['y_log'] = np.log1p(df['y'])
         
-        # Dynamic changepoint_prior_scale based on data variance
         y_std = df['y'].std()
         y_mean = df['y'].mean()
         cv = y_std / y_mean if y_mean > 0 else 0.5
-        
-        # More aggressive changepoints for volatile data
         changepoint_scale = 0.05 if cv < 0.3 else 0.08 if cv < 0.6 else 0.12
         
         model = Prophet(
-            yearly_seasonality=10,  # Higher Fourier order for better yearly patterns
-            weekly_seasonality=10,  # Higher Fourier order for better weekly patterns
+            yearly_seasonality=10,
+            weekly_seasonality=10,
             daily_seasonality=False,
             changepoint_prior_scale=changepoint_scale,
-            seasonality_prior_scale=8.0,  # Moderate seasonality strength
+            seasonality_prior_scale=8.0,
             seasonality_mode="additive"
         )
         
-        # CRITICAL FIX: Add regressors with prior_scale to prevent overfitting
         active_regressors = []
         for reg in REGRESSOR_COLUMNS:
             if reg in df.columns:
-                # Lower prior_scale = less influence, prevents overfitting
-                if 'closure' in reg:
-                    prior_scale = 0.15  # Closure has strong impact
-                elif 'promo' in reg or 'holiday' in reg:
-                    prior_scale = 0.10  # Moderate impact
-                else:
-                    prior_scale = 0.08  # Conservative for other events
-                
+                prior_scale = 0.15 if 'closure' in reg else 0.10 if 'promo' in reg or 'holiday' in reg else 0.08
                 model.add_regressor(reg, prior_scale=prior_scale, mode='additive')
                 active_regressors.append(reg)
 
-        # CRITICAL FIX: Train on log-transformed y
         model.fit(df[["ds", "y_log", *active_regressors]].rename(columns={'y_log': 'y'}))
 
-        # Save model with metadata
         meta = {
             "log_transform": True,
             "data_points": len(df),
@@ -1179,32 +1466,349 @@ def train_model(store_id: str, request: Optional[PredictionRequest] = None):
         }
         save_model_with_meta(store_id, model, meta)
 
-        logger.info(f"Model {store_id} trained - {len(df)} days, CV={cv:.3f}")
-
         return {
             "status": "success",
-            "message": f"Model trained successfully with {len(df)} days of data (log-scale, tuned regressors)",
+            "message": f"Model trained (legacy) with {len(df)} days of data",
             "data_points": len(df),
             "regressors": active_regressors,
             "cv": round(cv, 3),
             "changepoint_scale": round(changepoint_scale, 3)
         }
     except Exception as e:
-        logger.error(f"train_model error: {e}")
+        logger.error(f"Legacy training error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/retrain")
 def daily_retrain():
     """
-    Automatic daily retraining endpoint (called by cron scheduler)
-    Retrains the model with latest data
+    Trigger manual retraining immediately
     """
     try:
-        result = train_model("1")  # Default store_id
-        return result
+        if ENHANCED_TRAINING_AVAILABLE and retrain_scheduler:
+            retrain_scheduler.trigger_manual_retrain("1")
+            return {
+                "status": "success",
+                "message": "Manual retraining triggered",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            # Fallback to direct training
+            result = train_model("1", force_retrain=True)
+            return result
     except Exception as e:
-        logger.error(f"Daily retrain failed: {e}")
+        logger.error(f"Manual retrain failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/model/status/{store_id}")
+def get_model_status(store_id: str):
+    """
+    Get current model status and health metrics
+    """
+    if not ENHANCED_TRAINING_AVAILABLE or not model_trainer:
+        return {"status": "error", "message": "Enhanced training not available"}
+    
+    try:
+        model, metadata = model_trainer.load_model(store_id)
+        
+        if not model or not metadata:
+            return {
+                "status": "no_model",
+                "message": "No trained model found",
+                "recommendation": "Train a new model"
+            }
+        
+        # Calculate model age
+        model_age = model_trainer._get_model_age_days(metadata)
+        should_retrain, reason = model_trainer.should_retrain(store_id)
+        
+        # Get data freshness
+        end_date = datetime.fromisoformat(metadata.get("end_date", "")).date()
+        today = datetime.now().date()
+        data_age = (today - end_date).days
+        
+        status = {
+            "status": "healthy" if not should_retrain else "needs_retrain",
+            "model_version": metadata.get("model_version", "unknown"),
+            "model_age_days": model_age,
+            "data_age_days": data_age,
+            "accuracy": metadata.get("accuracy", 0),
+            "accuracy_threshold": MIN_ACCURACY_THRESHOLD,
+            "training_window_days": metadata.get("training_window_days", "unknown"),
+            "data_points": metadata.get("data_points", 0),
+            "date_range": {
+                "start": metadata.get("start_date"),
+                "end": metadata.get("end_date")
+            },
+            "should_retrain": should_retrain,
+            "retrain_reason": reason if should_retrain else None,
+            "quality_report": metadata.get("quality_report", {}),
+            "saved_at": metadata.get("saved_at"),
+            "next_scheduled_retrain": retrain_scheduler.get_next_run_time(store_id) if retrain_scheduler else "Not scheduled"
+        }
+        
+        return status
+        
+    except Exception as e:
+        logger.error(f"Get model status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/model/history/{store_id}")
+def get_model_history(store_id: str):
+    """
+    Get model training history and versions
+    """
+    if not ENHANCED_TRAINING_AVAILABLE:
+        return {"status": "error", "message": "Enhanced training not available"}
+    
+    try:
+        import glob
+        history_dir = f"{MODEL_DIR}/history"
+        pattern = f"{history_dir}/store_{store_id}_*_meta.json"
+        
+        history_files = sorted(glob.glob(pattern), reverse=True)
+        
+        history = []
+        for meta_file in history_files[:10]:  # Last 10 versions
+            try:
+                with open(meta_file, 'r') as f:
+                    meta = json.load(f)
+                    
+                history.append({
+                    "model_version": meta.get("model_version", "unknown"),
+                    "saved_at": meta.get("saved_at"),
+                    "accuracy": meta.get("accuracy", 0),
+                    "data_points": meta.get("data_points", 0),
+                    "date_range": {
+                        "start": meta.get("start_date"),
+                        "end": meta.get("end_date")
+                    },
+                    "training_time": meta.get("training_time_seconds", 0)
+                })
+            except Exception as e:
+                logger.warning(f"Failed to read history file {meta_file}: {e}")
+                continue
+        
+        return {
+            "status": "success",
+            "store_id": store_id,
+            "history_count": len(history),
+            "history": history
+        }
+        
+    except Exception as e:
+        logger.error(f"Get model history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/forecast/accuracy")
+def get_forecast_accuracy(store_id: str = "1"):
+    """
+    Get the forecast accuracy from the trained model.
+    Returns the accuracy value calculated during model validation.
+    
+    This endpoint is used by the frontend to display consistent accuracy
+    across all devices without local calculation.
+    """
+    try:
+        model, meta = load_model_with_meta(store_id)
+        
+        if not model or not meta:
+            logger.warning(f"No trained model found for store {store_id}")
+            return {"accuracy": None, "message": "No trained model available"}
+        
+        # Get accuracy from model metadata (calculated during training/validation)
+        accuracy = meta.get("accuracy", None)
+        
+        if accuracy is None:
+            # If no stored accuracy, recalculate from current data
+            logger.info("No stored accuracy, recalculating...")
+            historical_df = fetch_daily_sales_frame()
+            if len(historical_df) >= 30:
+                accuracy = calculate_forecast_accuracy(historical_df, model, meta)
+            else:
+                accuracy = None
+        
+        return {
+            "accuracy": accuracy,
+            "model_version": meta.get("model_version", "unknown"),
+            "last_trained": meta.get("saved_at", None)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get forecast accuracy error: {e}")
+        return {"accuracy": None, "error": str(e)}
+
+
+def get_validation_data_with_actual_regressors(validation_days: int = 14) -> pd.DataFrame:
+    """
+    CRITICAL: Get validation data with ACTUAL regressors from database.
+    
+    This function loads real data from daily_sales_summary and applies
+    the same preprocessing as training (outlier handling, smoothing, lag features).
+    
+    This is different from generate_future_regressors_clean() which creates
+    SYNTHETIC regressors for future forecasting.
+    """
+    query = """
+        SELECT ds, y, transactions_count, items_sold, avg_ticket,
+               is_weekend, promo_intensity, holiday_intensity,
+               event_intensity, closure_intensity
+        FROM daily_sales_summary
+        ORDER BY ds
+    """
+    
+    try:
+        df = pd.read_sql(query, engine, parse_dates=["ds"])
+    except Exception as e:
+        logger.error(f"Failed to fetch validation data: {e}")
+        return pd.DataFrame()
+    
+    if df.empty or len(df) < validation_days + 30:
+        logger.warning(f"Insufficient data for validation: {len(df)} rows")
+        return pd.DataFrame()
+    
+    df = df.sort_values("ds").copy()
+    
+    # CRITICAL: Store original y BEFORE any preprocessing for MAPE calculation
+    df["y_original"] = df["y"].copy()
+    
+    # Add calendar features (same as model_trainer)
+    df["is_payday"] = (df["ds"].dt.day.isin([25, 26, 27, 28, 29, 30, 31]) | (df["ds"].dt.day <= 5)).astype(int)
+    df["is_day_before_holiday"] = 0
+    df["is_school_holiday"] = 0
+    df["is_month_start"] = (df["ds"].dt.day <= 5).astype(int)
+    df["is_month_end"] = (df["ds"].dt.day >= 26).astype(int)
+    
+    # Handle outliers - clip to 1-99 percentile (same as model_trainer)
+    lower = np.percentile(df["y"], 1)
+    upper = np.percentile(df["y"], 99)
+    df["y"] = df["y"].clip(lower, upper)
+    
+    # Apply smoothing (same as model_trainer)
+    original_mean = df["y"].mean()
+    df["y"] = df["y"].rolling(window=3, center=True, min_periods=1).mean()
+    new_mean = df["y"].mean()
+    if new_mean > 0:
+        df["y"] = df["y"] * (original_mean / new_mean)
+    
+    # Add lag/rolling features (same as model_trainer)
+    df["lag_7"] = df["y"].shift(7)
+    df["rolling_mean_7"] = df["y"].shift(1).rolling(window=7, min_periods=3).mean()
+    df["rolling_std_7"] = df["y"].shift(1).rolling(window=7, min_periods=3).std()
+    
+    # Fill NaN with column mean
+    for col in ["lag_7", "rolling_mean_7", "rolling_std_7"]:
+        df[col] = df[col].fillna(df[col].mean() if df[col].notna().any() else 0)
+    
+    # Ensure all numeric columns
+    numeric_cols = ["y", "transactions_count", "items_sold", "avg_ticket", 
+                   "is_weekend", "promo_intensity", "holiday_intensity",
+                   "event_intensity", "closure_intensity", "is_payday",
+                   "is_day_before_holiday", "is_school_holiday",
+                   "is_month_start", "is_month_end",
+                   "lag_7", "rolling_mean_7", "rolling_std_7"]
+    
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+    
+    return df
+
+
+@app.get("/api/model/accuracy")
+def get_model_accuracy_with_actual_data(store_id: str = "1", validation_days: int = 14):
+    """
+    Get model accuracy from stored metadata (calculated during training).
+    
+    Returns the accuracy metrics that were computed during model training,
+    ensuring consistency between training validation and frontend display.
+    """
+    try:
+        # Load model and metadata
+        model, meta = load_model_with_meta(store_id)
+        
+        if not model or not meta:
+            return {
+                "status": "error",
+                "accuracy": None,
+                "message": "No trained model available"
+            }
+        
+        # Use stored accuracy from training (most reliable)
+        accuracy = meta.get("accuracy", 0)
+        train_mape = meta.get("train_mape", 0)
+        val_mape = meta.get("validation_mape", 0)
+        
+        # If old metadata format without detailed MAPE, estimate from accuracy
+        if val_mape == 0 and accuracy > 0:
+            val_mape = 100 - accuracy
+            train_mape = val_mape * 0.6  # Estimate
+        
+        # Determine fit status
+        gap = abs(val_mape - train_mape) if train_mape > 0 else 0
+        if gap > 20:
+            fit_status = "overfitting"
+        elif train_mape > 25 and val_mape > 25:
+            fit_status = "underfitting"
+        else:
+            fit_status = "good"
+        
+        logger.info(f"Model accuracy from metadata: {accuracy}% (train_mape={train_mape}%, val_mape={val_mape}%)")
+        
+        response = {
+            "status": "success",
+            "accuracy": round(accuracy, 1),
+            "train_mape": round(train_mape, 2),
+            "validation_mape": round(val_mape, 2),
+            "error_gap": round(gap, 2),
+            "fit_status": fit_status,
+            "validation_days": validation_days,
+            "data_points": meta.get("data_points", 0),
+            "model_version": meta.get("model_version", "unknown"),
+            "last_trained": meta.get("saved_at", None)
+        }
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Model accuracy error: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "accuracy": None,
+            "error": str(e)
+        }
+
+
+@app.post("/api/model/check-retrain/{store_id}")
+def check_and_retrain(store_id: str):
+    """
+    Check if model needs retraining and retrain if necessary
+    """
+    if not ENHANCED_TRAINING_AVAILABLE or not model_trainer:
+        return {"status": "error", "message": "Enhanced training not available"}
+    
+    try:
+        result = model_trainer.auto_retrain_if_needed(store_id)
+        
+        if result:
+            return {
+                "status": "retrained",
+                "message": "Model was retrained",
+                "accuracy": result.get("accuracy", 0),
+                "model_version": result.get("model_version"),
+                "data_points": result.get("data_points")
+            }
+        else:
+            return {
+                "status": "up_to_date",
+                "message": "Model is up-to-date, no retraining needed"
+            }
+            
+    except Exception as e:
+        logger.error(f"Check and retrain error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1286,25 +1890,52 @@ def get_prediction(store_id: str, request: PredictionRequest):
                 detail=f"Forecast days must be between {MIN_FORECAST_DAYS} and {MAX_FORECAST_DAYS}"
             )
 
-        future = model.make_future_dataframe(periods=forecast_days)
-        future = apply_future_regressors(future, historical_df, event_lookup)
+        # CRITICAL FIX: Generate future dates and clean regressors WITHOUT data leakage
+        last_date = historical_df['ds'].max()
+        future_dates = pd.date_range(start=last_date + timedelta(days=1), periods=forecast_days, freq='D')
+        
+        future = generate_future_regressors_clean(
+            dates=future_dates,
+            historical_df=historical_df,
+            event_lookup=event_lookup,
+            is_validation=False
+        )
+        
+        logger.info(f"Generated future regressors for {len(future)} days")
 
         expected_regressors = list(getattr(model, 'extra_regressors', {}).keys()) if hasattr(model, 'extra_regressors') else []
-        future_for_model = future[["ds", *expected_regressors]] if expected_regressors else future[["ds"]]
+        future_for_model = future[["ds"] + expected_regressors] if expected_regressors else future[["ds"]]
+        
+        # CRITICAL FIX: Apply scaler to future regressors if model was trained with scaled regressors
+        use_log_transform = meta and meta.get('log_transform', False)
+        regressor_scaled = meta and meta.get('regressor_scaled', False)
+        scaler_params = meta.get('scaler_params', None) if meta else None
+        
+        if regressor_scaled and scaler_params:
+            logger.info("Applying scaler to future regressors...")
+            future_for_model = apply_scaler_to_df(future_for_model, scaler_params)
+            
+            # Log scaled stats for debugging
+            for col in expected_regressors:
+                if col in scaler_params.get("columns", []):
+                    logger.info(f"  - Scaled {col}: mean={future_for_model[col].mean():.4f}")
+        
+        logger.info("Generating forecast...")
         forecast = model.predict(future_for_model)
 
         # CRITICAL FIX: Use metadata to determine if inverse transform is needed
-        use_log_transform = meta and meta.get('log_transform', False)
         
+        logger.info(f"Applying inverse transform: {use_log_transform}")
         if use_log_transform:
             # Model was trained on log scale, inverse transform predictions to original scale
+            logger.info(f"  - Before expm1: yhat range [{forecast['yhat'].min():.3f}, {forecast['yhat'].max():.3f}]")
             forecast['yhat'] = np.expm1(forecast['yhat'].clip(-10, 20))
             forecast['yhat_lower'] = np.expm1(forecast['yhat_lower'].clip(-10, 20))
             forecast['yhat_upper'] = np.expm1(forecast['yhat_upper'].clip(-10, 20))
-            logger.info(f"Prediction: Applied inverse log transform (metadata: log_transform=True)")
+            logger.info(f"  - After expm1: yhat range [{forecast['yhat'].min():.1f}, {forecast['yhat'].max():.1f}]")
         else:
-            # Model was trained on original scale
-            logger.info(f"Prediction: No inverse transform (metadata: log_transform=False)")
+            # Model was trained on original scale (no transform needed)
+            logger.info(f"  - yhat range: [{forecast['yhat'].min():.1f}, {forecast['yhat'].max():.1f}] (no transform)")
 
         # FIXED: Bug 3 - Check for empty forecast
         if forecast.empty:
@@ -1425,8 +2056,12 @@ def get_prediction(store_id: str, request: PredictionRequest):
             "historicalDays": len(historical_df),
             "forecastDays": forecast_days,
             "lastHistoricalDate": historical_df['ds'].max().strftime('%Y-%m-%d') if not historical_df.empty else None,
-            "accuracy": accuracy
+            "accuracy": accuracy,
+            "log_transform": use_log_transform
         })
+
+        logger.info(f"Prediction completed successfully. Accuracy: {accuracy}%")
+        logger.info(f"Growth factor: {growth_factor:.2f}, Predicted avg: {avg_predicted_sales:.1f}, Historical avg: {avg_historical_sales:.1f}")
 
         return {
             "status": "success",

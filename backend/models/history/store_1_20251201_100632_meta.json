@@ -1,0 +1,79 @@
+{
+  "log_transform": true,
+  "regressor_scaled": true,
+  "scaler_version": "1.0",
+  "scaler_params": {
+    "mean_": {
+      "promo_intensity": 0.019883040935672513,
+      "holiday_intensity": 0.011403508771929825,
+      "event_intensity": 0.01871345029239766,
+      "closure_intensity": 0.005847953216374269,
+      "transactions_count": 60.74269005847953,
+      "avg_ticket": 14.48162032867106
+    },
+    "scale_": {
+      "promo_intensity": 0.10698957868086155,
+      "holiday_intensity": 0.10569356450764537,
+      "event_intensity": 0.09941692464972417,
+      "closure_intensity": 0.0762479813473994,
+      "transactions_count": 23.277964175490055,
+      "avg_ticket": 1.0969276274216426
+    },
+    "columns": [
+      "promo_intensity",
+      "holiday_intensity",
+      "event_intensity",
+      "closure_intensity",
+      "transactions_count",
+      "avg_ticket"
+    ],
+    "version": "1.0"
+  },
+  "training_window_days": 180,
+  "data_points": 171,
+  "start_date": "2025-05-31T00:00:00",
+  "end_date": "2025-11-17T00:00:00",
+  "cv": 0.3886,
+  "changepoint_prior_scale": 0.08,
+  "regressors": [
+    "closure_intensity",
+    "promo_intensity",
+    "holiday_intensity",
+    "event_intensity",
+    "transactions_count",
+    "avg_ticket",
+    "is_weekend",
+    "is_payday",
+    "is_day_before_holiday",
+    "is_school_holiday"
+  ],
+  "scaled_regressors": [
+    "closure_intensity",
+    "promo_intensity",
+    "holiday_intensity",
+    "event_intensity",
+    "transactions_count",
+    "avg_ticket"
+  ],
+  "binary_regressors": [
+    "is_weekend",
+    "is_payday",
+    "is_day_before_holiday",
+    "is_school_holiday"
+  ],
+  "y_mean": 879.3602339181285,
+  "y_std": 341.6768091907446,
+  "quality_report": {
+    "total_days": 171,
+    "non_zero_ratio": 1.0,
+    "outlier_ratio": 0.0,
+    "outlier_count": 0,
+    "missing_dates": 0,
+    "data_age_days": 10
+  },
+  "training_time_seconds": 0.2,
+  "prophet_version": "1.1+",
+  "model_version": "20251127_180545",
+  "saved_at": "2025-11-27T11:05:45.945863",
+  "accuracy": 94.4
+}

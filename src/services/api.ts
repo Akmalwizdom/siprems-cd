@@ -199,6 +199,73 @@ class ApiService {
       throw error;
     }
   }
+
+  async getForecastAccuracy(storeId: string = '1'): Promise<{ accuracy: number | null; model_version?: string; last_trained?: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/forecast/accuracy?store_id=${storeId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Get forecast accuracy failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting forecast accuracy:', error);
+      return { accuracy: null };
+    }
+  }
+
+  async getModelAccuracy(storeId: string = '1'): Promise<ModelAccuracyResponse> {
+    try {
+      const response = await fetch(`${this.baseUrl}/model/accuracy?store_id=${storeId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Get model accuracy failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting model accuracy:', error);
+      return { 
+        status: 'error', 
+        accuracy: null, 
+        train_mape: null,
+        validation_mape: null,
+        error_gap: null,
+        fit_status: 'unknown'
+      };
+    }
+  }
+}
+
+export interface ModelAccuracyResponse {
+  status: string;
+  accuracy: number | null;
+  train_mape: number | null;
+  validation_mape: number | null;
+  error_gap: number | null;
+  fit_status: string;
+  validation_days?: number;
+  data_points?: number;
+  model_version?: string;
+  last_trained?: string;
+  validation_details?: {
+    dates: string[];
+    actual: number[];
+    predicted: number[];
+  };
+  message?: string;
+  error?: string;
 }
 
 export const apiService = new ApiService(API_BASE_URL);
