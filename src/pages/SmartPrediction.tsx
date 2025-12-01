@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, Loader2, TrendingUp, AlertTriangle, MessageSquare, Send, ChevronRight, Calendar, Package, TrendingDown, CheckCircle, Clock } from 'lucide-react';
 import { LineChart, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ComposedChart } from 'recharts';
 import { useStore } from '../context/StoreContext';
-import { apiService, type PredictionResponse } from '../services/api';
+import { apiService, type PredictionResponse, type ModelAccuracyResponse } from '../services/api';
 import { geminiService, type ChatMessage, type CommandAction } from '../services/gemini';
 import { PredictionData, RestockRecommendation } from '../types';
 import { Button } from '../components/ui/button';
@@ -30,6 +30,8 @@ export function SmartPrediction() {
   const [eventAnnotations, setEventAnnotations] = useState<PredictionResponse['eventAnnotations']>([]);
   const [error, setError] = useState<string>('');
   const [restockingProduct, setRestockingProduct] = useState<string | null>(null);
+  const [forecastAccuracy, setForecastAccuracy] = useState<number | null>(null);
+  const [accuracyDetails, setAccuracyDetails] = useState<ModelAccuracyResponse | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
@@ -40,6 +42,23 @@ export function SmartPrediction() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<CommandAction | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  const fetchForecastAccuracy = async () => {
+    try {
+      // Use new endpoint with actual regressors for accurate MAPE calculation
+      const result = await apiService.getModelAccuracy('1');
+      setForecastAccuracy(result.accuracy);
+      setAccuracyDetails(result);
+      
+      if (result.status === 'success') {
+        console.log(`Model accuracy loaded: ${result.accuracy}% (Train MAPE: ${result.train_mape}%, Val MAPE: ${result.validation_mape}%)`);
+      }
+    } catch (error) {
+      console.error('Error fetching forecast accuracy:', error);
+      setForecastAccuracy(null);
+      setAccuracyDetails(null);
+    }
+  };
 
   const handleStartPrediction = async (days?: PredictionRange | React.MouseEvent) => {
     setState('loading');
@@ -72,6 +91,9 @@ export function SmartPrediction() {
         setRestockRecommendations(response.recommendations);
         setPredictionMeta(response.meta);
         setEventAnnotations(response.eventAnnotations || []);
+
+        // Fetch forecast accuracy from dedicated backend endpoint
+        await fetchForecastAccuracy();
 
         // Update chatbot with insights
         const firstHoliday = response.chartData.find(d => d.isHoliday);
@@ -454,16 +476,20 @@ export function SmartPrediction() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+              <div className={`p-3 rounded-lg ${accuracyDetails?.fit_status === 'good' ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-yellow-500 to-orange-600'}`}>
                 <CheckCircle className="w-6 h-6 text-white" />
               </div>
-              <span className="text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                {predictionMeta.accuracy ? `${predictionMeta.accuracy}%` : 'N/A'}
+              <span className={`text-sm font-medium px-3 py-1 rounded-full ${accuracyDetails?.fit_status === 'good' ? 'text-green-600 bg-green-50' : 'text-yellow-600 bg-yellow-50'}`}>
+                {accuracyDetails?.fit_status === 'good' ? 'Good Fit' : accuracyDetails?.fit_status || 'N/A'}
               </span>
             </div>
             <h3 className="text-sm text-slate-500 mb-1">Forecast Accuracy</h3>
-            <p className="text-2xl font-medium text-slate-900">{predictionMeta.accuracy ? `${predictionMeta.accuracy}%` : 'N/A'}</p>
-            <p className="text-xs text-slate-400 mt-2">Model performance</p>
+            <p className="text-2xl font-medium text-slate-900">{forecastAccuracy !== null ? `${forecastAccuracy}%` : 'N/A'}</p>
+            <p className="text-xs text-slate-400 mt-2">
+              {accuracyDetails?.validation_mape !== null 
+                ? `Val MAPE: ${accuracyDetails.validation_mape}%` 
+                : 'Model performance'}
+            </p>
           </div>
 
           <div className="bg-white rounded-xl p-6 border border-slate-200">
@@ -500,7 +526,7 @@ export function SmartPrediction() {
         {/* Main Area (70%) */}
         <div className="lg:col-span-7 space-y-6">
 
-          {/* Forecast Chart */}
+          {/* Forecast Chart (INTEGRATED UI/UX HERE) */}
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="mb-6">
               <h2 className="text-xl font-medium text-slate-900 mb-1">Sales Forecast</h2>
@@ -508,12 +534,14 @@ export function SmartPrediction() {
             </div>
             <ResponsiveContainer width="100%" height={400}>
               <ComposedChart data={predictionData}>
+                {/* 1. Define Gradient for "Forecast" style */}
                 <defs>
                   <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.4}/>
                     <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.05}/>
                   </linearGradient>
                 </defs>
+                
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis 
                   dataKey="date" 
@@ -530,75 +558,92 @@ export function SmartPrediction() {
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
                     padding: '12px',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                   }}
                 />
                 <Legend wrapperStyle={{ paddingTop: '20px' }} />
                 
-                {/* Historical Line */}
+                {/* 2. Visual Separation: Historical (Solid) vs Predicted (Dashed/Gradient) */}
+                {/* Historical: Solid Line, Darker color */}
                 <Line
                   type="monotone"
                   dataKey="historical"
-                  stroke="#64748b"
+                  stroke="#334155"
                   strokeWidth={2.5}
                   name="Historical Sales"
-                  dot={false}
+                  dot={{ r: 3, fill: '#334155' }}
+                  activeDot={{ r: 6 }}
                   connectNulls={false}
                 />
                 
-                {/* Predicted Area */}
+                {/* Predicted: Combined Component (Area + Line Style) - Single Component */}
                 <Area
                   type="monotone"
                   dataKey="predicted"
                   stroke="#4f46e5"
                   strokeWidth={2.5}
+                  strokeDasharray="5 5"
                   fill="url(#colorPredicted)"
-                  name="AI Prediction"
+                  fillOpacity={1}
+                  name="AI Forecast"
                   dot={false}
                   connectNulls={true}
                 />
                 
-                {/* Event Markers with Colors by Category */}
+                {/* 3. Annotations: Event Markers & Labels */}
                 {eventAnnotations.map((event, idx) => {
                   const mainType = event.types[0] || 'event';
+                  const color = getEventCategoryColor(mainType);
                   return (
                     <ReferenceLine
                       key={idx}
                       x={event.date}
-                      stroke={getEventCategoryColor(mainType)}
-                      strokeWidth={2}
+                      stroke={color}
+                      strokeWidth={1.5}
                       strokeDasharray="3 3"
                       label={{
-                        value: event.titles[0] || 'Event',
+                        value: event.titles[0],
                         position: 'top',
-                        fill: getEventCategoryColor(mainType),
-                        fontSize: 11,
-                        fontWeight: 600,
+                        fill: color, // Gunakan warna event agar teks terlihat jelas
+                        fontSize: 12,
+                        fontWeight: 700,
+                        dy: -10
                       }}
                     />
                   );
                 })}
               </ComposedChart>
             </ResponsiveContainer>
-            <div className="mt-6 flex flex-wrap items-center gap-4 text-sm">
+            
+            {/* Custom Legend/Explanation for the UI Styles */}
+            <div className="mt-6 flex flex-wrap items-center gap-4 text-sm bg-slate-50 p-3 rounded-lg border border-slate-100">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-0.5 bg-slate-600"></div>
-                <span className="text-slate-600">Historical</span>
+                <div className="w-6 h-0.5 bg-slate-700"></div>
+                <span className="text-slate-600 text-xs">Past Sales (Fact)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-3 bg-indigo-600 opacity-40 rounded-sm"></div>
-                <span className="text-slate-600">Predicted</span>
+                <div className="flex items-center">
+                   <div className="w-6 h-0.5 bg-indigo-600 border-t border-dashed"></div>
+                </div>
+                <span className="text-slate-600 text-xs">AI Forecast (Est.)</span>
+              </div>
+              <div className="w-px h-4 bg-slate-300 mx-2"></div>
+              {/* Event Legend */}
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                <span className="text-slate-600 text-xs">Promo</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-slate-600">Promotion</span>
+                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                <span className="text-slate-600 text-xs">Holiday</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                <span className="text-slate-600">Holiday</span>
+                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                <span className="text-slate-600 text-xs">Event</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
-                <span className="text-slate-600">Event</span>
+                <div className="w-2 h-2 rounded-full bg-gray-500"></div>
+                <span className="text-slate-600 text-xs">Store Closed</span>
               </div>
             </div>
           </div>
