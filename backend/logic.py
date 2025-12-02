@@ -16,6 +16,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple, List
+from timezone_utils import wib_isoformat
 
 MODEL_DIR = "/app/models"
 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -175,7 +176,7 @@ def train_model_logic(store_id: str, df: pd.DataFrame) -> Dict:
         "scaled_regressors": [r for r in active_regressors if r in SCALED_REGRESSORS],
         "y_mean": float(df_train['y_original'].mean()),
         "y_std": float(df_train['y_original'].std()),
-        "saved_at": datetime.utcnow().isoformat()
+        "saved_at": wib_isoformat()
     }
     
     # Save model and metadata

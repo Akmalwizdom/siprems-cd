@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Minus, Trash2, ShoppingCart, Loader2, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { Product, CartItem } from '../types';
+import { formatIDR } from '../utils/currency';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -101,7 +102,7 @@ export function Transaction() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('id-ID', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -187,7 +188,7 @@ export function Transaction() {
       }
       
       const result = await response.json();
-      alert(`Transaction completed successfully! Total: $${total.toFixed(2)}\nTransaction ID: ${result.transaction_id?.slice(0, 8)}...`);
+      alert(`Transaksi berhasil! Total: ${formatIDR(total)}\nID Transaksi: ${result.transaction_id?.slice(0, 8)}...`);
       setCart([]);
       setPaymentMethod('Cash');
       setOrderType('dine-in');
@@ -196,7 +197,7 @@ export function Transaction() {
       await fetchProducts();
     } catch (error) {
       console.error('Error saving transaction:', error);
-      alert(`Failed to save transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert(`Gagal menyimpan transaksi: ${error instanceof Error ? error.message : 'Kesalahan tidak diketahui'}`);
     } finally {
       setLoading(false);
     }
@@ -206,7 +207,7 @@ export function Transaction() {
     <div className="space-y-6">
       {/* Header with Tabs */}
       <div>
-        <h1 className="text-slate-900 mb-4">Transaction Management</h1>
+        <h1 className="text-slate-900 mb-4">Manajemen Transaksi</h1>
         <div className="flex gap-2 border-b border-slate-200">
           <button
             onClick={() => setActiveTab('pos')}
@@ -218,7 +219,7 @@ export function Transaction() {
           >
             <div className="flex items-center gap-2">
               <ShoppingCart className="w-4 h-4" />
-              Point of Sale
+              Kasir
             </div>
           </button>
           <button
@@ -231,7 +232,7 @@ export function Transaction() {
           >
             <div className="flex items-center gap-2">
               <History className="w-4 h-4" />
-              Transaction History
+              Riwayat Transaksi
             </div>
           </button>
         </div>
@@ -317,7 +318,7 @@ function POSView({
       {/* Product Catalog */}
       <div className="lg:col-span-2 space-y-4">
         <div>
-          <p className="text-slate-500">Select products to create a transaction</p>
+          <p className="text-slate-500">Pilih produk untuk membuat transaksi</p>
         </div>
 
         {/* Search and Filter */}
@@ -328,7 +329,7 @@ function POSView({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search products..."
+              placeholder="Cari produk..."
               className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
@@ -354,7 +355,7 @@ function POSView({
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {filteredProducts.length === 0 ? (
             <div className="col-span-full text-center py-8 text-slate-500">
-              No products found
+              Produk tidak ditemukan
             </div>
           ) : (
             filteredProducts.map((product) => (
@@ -369,8 +370,8 @@ function POSView({
               <h3 className="text-slate-900 mb-1 line-clamp-1">{product.name}</h3>
               <p className="text-xs text-slate-500 mb-2">{product.category}</p>
               <div className="flex items-center justify-between">
-                <span className="text-indigo-600">${product.sellingPrice}</span>
-                <span className="text-xs text-slate-500">Stock: {product.stock}</span>
+                <span className="text-indigo-600">{formatIDR(product.sellingPrice)}</span>
+                <span className="text-xs text-slate-500">Stok: {product.stock}</span>
               </div>
             </button>
           ))
@@ -384,17 +385,17 @@ function POSView({
           <div className="p-6 border-b border-slate-200">
             <div className="flex items-center gap-3 mb-2">
               <ShoppingCart className="w-6 h-6 text-indigo-600" />
-              <h2 className="text-slate-900">Current Order</h2>
+              <h2 className="text-slate-900">Pesanan Saat Ini</h2>
             </div>
-            <p className="text-slate-500">{cart.length} item(s)</p>
+            <p className="text-slate-500">{cart.length} barang</p>
           </div>
 
           <div className="p-6 max-h-96 overflow-y-auto">
             {cart.length === 0 ? (
               <div className="text-center py-8">
                 <ShoppingCart className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500">Cart is empty</p>
-                <p className="text-xs text-slate-400 mt-1">Add products to start</p>
+                <p className="text-slate-500">Keranjang kosong</p>
+                <p className="text-xs text-slate-400 mt-1">Tambahkan produk untuk memulai</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -405,7 +406,7 @@ function POSView({
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="text-slate-900 truncate">{item.product.name}</h4>
-                      <p className="text-slate-600">${item.product.sellingPrice}</p>
+                      <p className="text-slate-600">{formatIDR(item.product.sellingPrice)}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <button
                           onClick={() => updateQuantity(item.product.id, -1)}
@@ -437,48 +438,48 @@ function POSView({
           <div className="p-6 border-t border-slate-200 space-y-3">
             <div className="flex justify-between text-slate-600">
               <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>{formatIDR(subtotal)}</span>
             </div>
             <div className="flex justify-between text-slate-600">
-              <span>Tax (10%)</span>
-              <span>${tax.toFixed(2)}</span>
+              <span>Pajak (10%)</span>
+              <span>{formatIDR(tax)}</span>
             </div>
             <div className="flex justify-between text-slate-900 pt-3 border-t border-slate-200">
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>{formatIDR(total)}</span>
             </div>
             
             {/* Payment Method Selection */}
             <div className="pt-3 border-t border-slate-200">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Payment Method
+                Metode Pembayaran
               </label>
               <select
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                <option value="Cash">Cash</option>
+                <option value="Cash">Tunai</option>
                 <option value="QRIS">QRIS</option>
-                <option value="Debit Card">Debit Card</option>
-                <option value="Credit Card">Credit Card</option>
-                <option value="E-Wallet">E-Wallet</option>
+                <option value="Debit Card">Kartu Debit</option>
+                <option value="Credit Card">Kartu Kredit</option>
+                <option value="E-Wallet">Dompet Digital</option>
               </select>
             </div>
 
             {/* Order Type Selection */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Order Type
+                Jenis Pesanan
               </label>
               <select
                 value={orderType}
                 onChange={(e) => setOrderType(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                <option value="dine-in">Dine In</option>
-                <option value="takeaway">Takeaway</option>
-                <option value="delivery">Delivery</option>
+                <option value="dine-in">Makan di Tempat</option>
+                <option value="takeaway">Bawa Pulang</option>
+                <option value="delivery">Pesan Antar</option>
               </select>
             </div>
 
@@ -487,7 +488,7 @@ function POSView({
               disabled={cart.length === 0}
               className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
             >
-              Checkout
+              Bayar
             </button>
           </div>
         </div>
@@ -513,11 +514,11 @@ function HistoryView({
         <table className="w-full">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-4 text-left text-slate-700">Date</th>
-              <th className="px-6 py-4 text-left text-slate-700">Transaction ID</th>
-              <th className="px-6 py-4 text-left text-slate-700">Customer</th>
-              <th className="px-6 py-4 text-left text-slate-700">Payment</th>
-              <th className="px-6 py-4 text-left text-slate-700">Items</th>
+              <th className="px-6 py-4 text-left text-slate-700">Tanggal</th>
+              <th className="px-6 py-4 text-left text-slate-700">ID Transaksi</th>
+              <th className="px-6 py-4 text-left text-slate-700">Jenis</th>
+              <th className="px-6 py-4 text-left text-slate-700">Pembayaran</th>
+              <th className="px-6 py-4 text-left text-slate-700">Jumlah</th>
               <th className="px-6 py-4 text-left text-slate-700">Total</th>
             </tr>
           </thead>
@@ -533,7 +534,7 @@ function HistoryView({
             ) : transactions.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                  No transactions found
+                  Tidak ada transaksi
                 </td>
               </tr>
             ) : (
@@ -546,9 +547,9 @@ function HistoryView({
                       {t.order_types || 'N/A'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-600">{t.payment_method || 'Cash'}</td>
+                  <td className="px-6 py-4 text-slate-600">{t.payment_method || 'Tunai'}</td>
                   <td className="px-6 py-4 text-slate-600">{t.items_count}</td>
-                  <td className="px-6 py-4 font-medium text-slate-900">${t.total_amount.toFixed(2)}</td>
+                  <td className="px-6 py-4 font-medium text-slate-900">{formatIDR(t.total_amount)}</td>
                 </tr>
               ))
             )}
@@ -559,7 +560,7 @@ function HistoryView({
       {/* Pagination */}
       <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
         <span className="text-sm text-slate-500">
-          Showing {transactions.length > 0 ? (page - 1) * limit + 1 : 0} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+          Menampilkan {transactions.length > 0 ? (page - 1) * limit + 1 : 0} sampai {Math.min(page * limit, totalItems)} dari {totalItems} data
         </span>
         <div className="flex items-center gap-2">
           <button
@@ -570,7 +571,7 @@ function HistoryView({
             <ChevronLeft className="w-4 h-4 text-slate-600" />
           </button>
           <span className="text-sm text-slate-600">
-            Page {page} of {totalPages || 1}
+            Halaman {page} dari {totalPages || 1}
           </span>
           <button
             onClick={() => setPage((p: number) => Math.min(totalPages, p + 1))}

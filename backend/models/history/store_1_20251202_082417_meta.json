@@ -4,26 +4,26 @@
   "scaler_version": "2.0",
   "scaler_params": {
     "mean_": {
-      "promo_intensity": 0.020258620689655175,
-      "holiday_intensity": 0.004310344827586207,
-      "event_intensity": 0.027155172413793102,
-      "closure_intensity": 0.008620689655172414,
-      "transactions_count": 55.43103448275862,
-      "avg_ticket": 251072.63890719606,
-      "lag_7": 14018929.770642202,
-      "rolling_mean_7": 13801486.6182048,
-      "rolling_std_7": 6589947.373456397
+      "promo_intensity": 0.02043478260869565,
+      "holiday_intensity": 0.004347826086956522,
+      "event_intensity": 0.027391304347826086,
+      "closure_intensity": 0.008695652173913044,
+      "transactions_count": 55.84347826086957,
+      "avg_ticket": 14.858041222654533,
+      "lag_7": 848.2899444444446,
+      "rolling_mean_7": 835.477425170068,
+      "rolling_std_7": 398.8492343341072
     },
     "scale_": {
-      "promo_intensity": 0.09999535512399248,
-      "holiday_intensity": 0.0462232986843259,
-      "event_intensity": 0.11788221791615708,
-      "closure_intensity": 0.0924465973686518,
-      "transactions_count": 29.928427305804277,
-      "avg_ticket": 54350.76092505182,
-      "lag_7": 6719118.2284360705,
-      "rolling_mean_7": 2742272.3875240698,
-      "rolling_std_7": 2015648.5010289478
+      "promo_intensity": 0.10041125265494573,
+      "holiday_intensity": 0.046422079356657875,
+      "event_intensity": 0.1183663212714755,
+      "closure_intensity": 0.09284415871331575,
+      "transactions_count": 29.71417208478658,
+      "avg_ticket": 2.3768807507176386,
+      "lag_7": 403.50953744172125,
+      "rolling_mean_7": 159.70299835830946,
+      "rolling_std_7": 117.69203496376672
     },
     "columns": [
       "promo_intensity",
@@ -38,21 +38,21 @@
     ],
     "version": "2.0"
   },
-  "training_window_days": 365,
-  "data_points": 116,
+  "training_window_days": 180,
+  "data_points": 115,
   "start_date": "2025-08-09T00:00:00",
-  "end_date": "2025-12-02T00:00:00",
-  "cv": 0.3537,
-  "changepoint_prior_scale": 0.02,
+  "end_date": "2025-12-01T00:00:00",
+  "cv": 0.3482,
+  "changepoint_prior_scale": 0.05,
   "prophet_params": {
     "yearly_seasonality": false,
-    "weekly_seasonality": 5,
+    "weekly_seasonality": 8,
     "daily_seasonality": false,
-    "seasonality_mode": "additive",
-    "seasonality_prior_scale": 5.0,
-    "changepoint_prior_scale": 0.02,
-    "changepoint_range": 0.7,
-    "n_changepoints": 10
+    "seasonality_mode": "multiplicative",
+    "seasonality_prior_scale": 8.0,
+    "changepoint_prior_scale": 0.05,
+    "changepoint_range": 0.8,
+    "n_changepoints": 15
   },
   "regressors": [
     "closure_intensity",
@@ -90,19 +90,19 @@
     "is_month_start",
     "is_month_end"
   ],
-  "y_mean": 13532120.60344828,
-  "y_std": 4785970.554763352,
+  "y_mean": 819.2734260869563,
+  "y_std": 285.29263201848823,
   "quality_report": {
-    "total_days": 116,
+    "total_days": 115,
     "non_zero_ratio": 1.0,
     "outlier_count": 1,
     "outlier_ratio": 0.009,
     "data_age_days": 0
   },
   "training_time_seconds": 0.1,
-  "model_version": "20251202_082417",
-  "saved_at": "2025-12-02T08:24:17.418042+07:00",
-  "accuracy": 84.2,
-  "train_mape": 9.49,
-  "validation_mape": 15.78
+  "model_version": "20251201_100632",
+  "saved_at": "2025-12-01T03:06:32.212692",
+  "accuracy": 82.6,
+  "train_mape": 8.99,
+  "validation_mape": 17.45
 }

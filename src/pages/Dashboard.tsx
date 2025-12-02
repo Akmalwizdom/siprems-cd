@@ -2,14 +2,15 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, ShoppingBag, Package, AlertCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TimeRange, DashboardMetrics, CategorySales } from '../types';
+import { formatIDR } from '../utils/currency';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
 const timeRanges: { value: TimeRange; label: string }[] = [
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This Week' },
-  { value: 'month', label: 'This Month' },
-  { value: 'year', label: 'This Year' },
+  { value: 'today', label: 'Hari Ini' },
+  { value: 'week', label: 'Minggu Ini' },
+  { value: 'month', label: 'Bulan Ini' },
+  { value: 'year', label: 'Tahun Ini' },
 ];
 
 export function Dashboard() {
@@ -62,8 +63,8 @@ export function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-slate-900 mb-1">Dashboard</h1>
-          <p className="text-slate-500">Welcome back! Here's your business overview</p>
+          <h1 className="text-slate-900 mb-1">Dasbor</h1>
+          <p className="text-slate-500">Selamat datang! Berikut ringkasan bisnis Anda</p>
         </div>
         <div className="flex gap-2">
           {timeRanges.map((range) => (
@@ -93,9 +94,9 @@ export function Dashboard() {
               {metrics.revenueChange >= 0 ? '+' : ''}{metrics.revenueChange}%
             </span>
           </div>
-          <h3 className="text-slate-500 mb-1">Total Revenue</h3>
-          <p className="text-slate-900">${metrics.totalRevenue.toLocaleString()}</p>
-          <p className="text-xs text-slate-400 mt-2">vs last period</p>
+          <h3 className="text-slate-500 mb-1">Total Pendapatan</h3>
+          <p className="text-slate-900">{formatIDR(metrics.totalRevenue)}</p>
+          <p className="text-xs text-slate-400 mt-2">vs periode sebelumnya</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-slate-200">
@@ -107,9 +108,9 @@ export function Dashboard() {
               {metrics.transactionsChange >= 0 ? '+' : ''}{metrics.transactionsChange}%
             </span>
           </div>
-          <h3 className="text-slate-500 mb-1">Total Transactions</h3>
+          <h3 className="text-slate-500 mb-1">Total Transaksi</h3>
           <p className="text-slate-900">{metrics.totalTransactions.toLocaleString()}</p>
-          <p className="text-xs text-slate-400 mt-2">vs last period</p>
+          <p className="text-xs text-slate-400 mt-2">vs periode sebelumnya</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-slate-200">
@@ -121,9 +122,9 @@ export function Dashboard() {
               {metrics.itemsChange >= 0 ? '+' : ''}{metrics.itemsChange}%
             </span>
           </div>
-          <h3 className="text-slate-500 mb-1">Items Sold</h3>
+          <h3 className="text-slate-500 mb-1">Barang Terjual</h3>
           <p className="text-slate-900">{metrics.totalItemsSold.toLocaleString()}</p>
-          <p className="text-xs text-slate-400 mt-2">vs last period</p>
+          <p className="text-xs text-slate-400 mt-2">vs periode sebelumnya</p>
         </div>
       </div>
 
@@ -131,8 +132,8 @@ export function Dashboard() {
         {/* Sales Performance Chart */}
         <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-slate-200">
           <div className="mb-6">
-            <h2 className="text-slate-900 mb-1">Sales Performance</h2>
-            <p className="text-slate-500">Track your revenue trends</p>
+            <h2 className="text-slate-900 mb-1">Performa Penjualan</h2>
+            <p className="text-slate-500">Pantau tren pendapatan Anda</p>
           </div>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={salesData}>
@@ -167,8 +168,8 @@ export function Dashboard() {
         {/* Top Selling Categories */}
         <div className="bg-white rounded-xl p-6 border border-slate-200">
           <div className="mb-6">
-            <h2 className="text-slate-900 mb-1">Top Categories</h2>
-            <p className="text-slate-500">Best performing</p>
+            <h2 className="text-slate-900 mb-1">Kategori Teratas</h2>
+            <p className="text-slate-500">Performa terbaik</p>
           </div>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
@@ -196,7 +197,7 @@ export function Dashboard() {
           </ResponsiveContainer>
           <div className="space-y-2 mt-4">
             {categorySales.length === 0 && (
-              <p className="text-sm text-slate-500">No category data yet</p>
+              <p className="text-sm text-slate-500">Belum ada data kategori</p>
             )}
             {categorySales.map((cat) => (
               <div key={cat.category} className="flex items-center justify-between">
@@ -222,9 +223,9 @@ export function Dashboard() {
               <AlertCircle className="w-6 h-6 text-red-600" />
             </div>
             <div className="flex-1">
-              <h3 className="text-red-900 mb-2">Critical Stock Alert</h3>
+              <h3 className="text-red-900 mb-2">Peringatan Stok Kritis</h3>
               <p className="text-red-700 mb-4">
-                {criticalStockItems.length} item(s) are running low on stock
+                {criticalStockItems.length} barang hampir habis
               </p>
               <div className="flex flex-wrap gap-2">
                 {criticalStockItems.map((item) => (
@@ -232,7 +233,7 @@ export function Dashboard() {
                     key={item.id}
                     className="px-3 py-1 bg-white text-red-700 rounded-full border border-red-200"
                   >
-                    {item.name} ({item.stock} left)
+                    {item.name} (tersisa {item.stock})
                   </span>
                 ))}
               </div>

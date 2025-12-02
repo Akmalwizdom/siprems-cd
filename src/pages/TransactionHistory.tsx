@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { formatIDR } from '../utils/currency';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -106,7 +107,7 @@ export function TransactionHistory() {
                     </td>
                     <td className="px-6 py-4 text-slate-600">{t.payment_method || 'Cash'}</td>
                     <td className="px-6 py-4 text-slate-600">{t.items_count}</td>
-                    <td className="px-6 py-4 font-medium text-slate-900">${t.total_amount.toFixed(2)}</td>
+                    <td className="px-6 py-4 font-medium text-slate-900">{formatIDR(t.total_amount)}</td>
                   </tr>
                 ))
               )}

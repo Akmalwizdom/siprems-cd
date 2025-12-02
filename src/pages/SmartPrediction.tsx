@@ -35,7 +35,7 @@ export function SmartPrediction() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: 'I\'m your AI assistant. Click "Start Prediction" to generate stock forecasts based on your calendar events and sales history.',
+      content: 'Saya adalah asisten AI Anda. Klik "Mulai Prediksi" untuk menghasilkan perkiraan stok berdasarkan kalender acara dan riwayat penjualan Anda.',
     },
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -333,7 +333,7 @@ export function SmartPrediction() {
         <div className="inline-flex w-24 h-24 bg-gradient-to-br from-red-500 to-orange-600 rounded-3xl items-center justify-center mb-6">
           <AlertTriangle className="w-12 h-12 text-white" />
         </div>
-        <h1 className="text-2xl text-slate-900 mb-2">Prediction Error</h1>
+        <h1 className="text-2xl text-slate-900 mb-2">Kesalahan Prediksi</h1>
         <p className="text-sm text-red-600 mb-8 max-w-lg mx-auto">{error}</p>
         <Button
           onClick={() => {
@@ -344,7 +344,7 @@ export function SmartPrediction() {
           className="shadow-lg hover:shadow-xl"
         >
           <Sparkles className="w-5 h-5" />
-          Try Again
+          Coba Lagi
         </Button>
       </div>
     );
@@ -357,9 +357,9 @@ export function SmartPrediction() {
         <div className="inline-flex w-24 h-24 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-3xl items-center justify-center mb-6">
           <Sparkles className="w-12 h-12 text-white" />
         </div>
-        <h1 className="text-2xl text-slate-900 mb-2">Smart Stock Prediction</h1>
+        <h1 className="text-2xl text-slate-900 mb-2">Prediksi Stok Cerdas</h1>
         <p className="text-sm text-slate-500 mb-8 max-w-lg mx-auto">
-          Our AI analyzes your sales history, seasonal trends, and upcoming holidays to predict demand and recommend optimal stock levels.
+          AI kami menganalisis riwayat penjualan, tren musiman, dan hari libur mendatang untuk memprediksi permintaan dan merekomendasikan level stok optimal.
         </p>
         <Button
           onClick={() => handleStartPrediction()}
@@ -367,23 +367,23 @@ export function SmartPrediction() {
           className="shadow-lg hover:shadow-xl"
         >
           <Sparkles className="w-5 h-5" />
-          Start Prediction
+          Mulai Prediksi
         </Button>
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <TrendingUp className="w-8 h-8 text-indigo-600 mb-3" />
-            <h3 className="text-base font-medium text-slate-900 mb-1">Trend Analysis</h3>
-            <p className="text-sm text-slate-500">Identify patterns in your sales data</p>
+            <h3 className="text-base font-medium text-slate-900 mb-1">Analisis Tren</h3>
+            <p className="text-sm text-slate-500">Identifikasi pola dalam data penjualan Anda</p>
           </div>
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <Calendar className="w-8 h-8 text-indigo-600 mb-3" />
-            <h3 className="text-base font-medium text-slate-900 mb-1">Holiday Impact</h3>
-            <p className="text-sm text-slate-500">Predict spikes during special events</p>
+            <h3 className="text-base font-medium text-slate-900 mb-1">Dampak Hari Libur</h3>
+            <p className="text-sm text-slate-500">Prediksi lonjakan saat acara khusus</p>
           </div>
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <AlertTriangle className="w-8 h-8 text-indigo-600 mb-3" />
-            <h3 className="text-base font-medium text-slate-900 mb-1">Smart Alerts</h3>
-            <p className="text-sm text-slate-500">Get notified before stockouts</p>
+            <h3 className="text-base font-medium text-slate-900 mb-1">Peringatan Cerdas</h3>
+            <p className="text-sm text-slate-500">Notifikasi sebelum stok habis</p>
           </div>
         </div>
       </div>
@@ -397,9 +397,9 @@ export function SmartPrediction() {
         <div className="inline-flex w-24 h-24 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-3xl items-center justify-center mb-6 animate-pulse">
           <Loader2 className="w-12 h-12 text-white animate-spin" />
         </div>
-        <h1 className="text-2xl text-slate-900 mb-2">Analyzing Your Data...</h1>
+        <h1 className="text-2xl text-slate-900 mb-2">Menganalisis Data Anda...</h1>
         <p className="text-sm text-slate-500 mb-8">
-          Our AI is processing your sales history and generating forecasts
+          AI kami sedang memproses riwayat penjualan dan menghasilkan prediksi
         </p>
         <div className="max-w-md mx-auto">
           <div className="bg-slate-200 rounded-full h-2 overflow-hidden">
@@ -408,15 +408,15 @@ export function SmartPrediction() {
           <div className="mt-6 space-y-3 text-left">
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span>Loading sales data...</span>
+              <span>Memuat data penjualan...</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span>Analyzing seasonal patterns...</span>
+              <span>Menganalisis pola musiman...</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-              <span>Generating predictions...</span>
+              <span>Menghasilkan prediksi...</span>
             </div>
           </div>
         </div>
@@ -431,19 +431,19 @@ export function SmartPrediction() {
         <div className="inline-flex w-24 h-24 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-3xl items-center justify-center mb-6">
           <AlertTriangle className="w-12 h-12 text-white" />
         </div>
-        <h1 className="text-2xl text-slate-900 mb-2">System is Learning</h1>
+        <h1 className="text-2xl text-slate-900 mb-2">Sistem Sedang Belajar</h1>
         <p className="text-sm text-slate-500 mb-8 max-w-lg mx-auto">
-          We need at least 7 days of sales data to generate accurate predictions. Keep using the system and check back soon!
+          Kami membutuhkan minimal 7 hari data penjualan untuk menghasilkan prediksi yang akurat. Terus gunakan sistem dan periksa kembali nanti!
         </p>
         <div className="bg-white rounded-xl p-6 border border-slate-200 max-w-md mx-auto">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-slate-700">Data Collection Progress</span>
-            <span className="text-sm font-medium text-indigo-600">3/7 days</span>
+            <span className="text-sm font-medium text-slate-700">Progres Pengumpulan Data</span>
+            <span className="text-sm font-medium text-indigo-600">3/7 hari</span>
           </div>
           <div className="bg-slate-200 rounded-full h-3 overflow-hidden">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 h-full rounded-full" style={{ width: '43%' }}></div>
           </div>
-          <p className="text-xs text-slate-400 mt-3">4 more days until predictions are available</p>
+          <p className="text-xs text-slate-400 mt-3">4 hari lagi hingga prediksi tersedia</p>
         </div>
       </div>
     );
@@ -455,8 +455,8 @@ export function SmartPrediction() {
       {/* Header with Range Selector */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl text-slate-900 mb-1">AI Prediction Results</h1>
-          <p className="text-sm text-slate-500">Forecast generated on {new Date().toLocaleDateString()}</p>
+          <h1 className="text-2xl text-slate-900 mb-1">Hasil Prediksi AI</h1>
+          <p className="text-sm text-slate-500">Prediksi dibuat pada {new Date().toLocaleDateString('id-ID')}</p>
         </div>
         <div className="flex gap-2">
           {([7, 30, 90] as PredictionRange[]).map((days) => (
@@ -465,7 +465,7 @@ export function SmartPrediction() {
               onClick={() => handleRangeChange(days)}
               variant={predictionRange === days ? 'default' : 'outline'}
             >
-              {days} days
+              {days} hari
             </Button>
           ))}
         </div>
@@ -483,12 +483,12 @@ export function SmartPrediction() {
                 {accuracyDetails?.fit_status === 'good' ? 'Good Fit' : accuracyDetails?.fit_status || 'N/A'}
               </span>
             </div>
-            <h3 className="text-sm text-slate-500 mb-1">Forecast Accuracy</h3>
+            <h3 className="text-sm text-slate-500 mb-1">Akurasi Prediksi</h3>
             <p className="text-2xl font-medium text-slate-900">{forecastAccuracy !== null ? `${forecastAccuracy}%` : 'N/A'}</p>
             <p className="text-xs text-slate-400 mt-2">
               {accuracyDetails?.validation_mape !== null 
                 ? `Val MAPE: ${accuracyDetails.validation_mape}%` 
-                : 'Model performance'}
+                : 'Performa model'}
             </p>
           </div>
 
@@ -501,9 +501,9 @@ export function SmartPrediction() {
                 {((predictionMeta.applied_factor - 1) * 100) >= 0 ? '+' : ''}{((predictionMeta.applied_factor - 1) * 100).toFixed(1)}%
               </span>
             </div>
-            <h3 className="text-sm text-slate-500 mb-1">Growth Factor</h3>
+            <h3 className="text-sm text-slate-500 mb-1">Faktor Pertumbuhan</h3>
             <p className="text-2xl font-medium text-slate-900">{((predictionMeta.applied_factor - 1) * 100).toFixed(1)}%</p>
-            <p className="text-xs text-slate-400 mt-2">vs last period</p>
+            <p className="text-xs text-slate-400 mt-2">vs periode sebelumnya</p>
           </div>
 
           <div className="bg-white rounded-xl p-6 border border-slate-200">
@@ -515,9 +515,9 @@ export function SmartPrediction() {
                 {restockRecommendations.filter(r => r.urgency === 'high').length}
               </span>
             </div>
-            <h3 className="text-sm text-slate-500 mb-1">High-Risk Items</h3>
+            <h3 className="text-sm text-slate-500 mb-1">Barang Berisiko Tinggi</h3>
             <p className="text-2xl font-medium text-slate-900">{restockRecommendations.filter(r => r.urgency === 'high').length}</p>
-            <p className="text-xs text-slate-400 mt-2">Need immediate restock</p>
+            <p className="text-xs text-slate-400 mt-2">Perlu segera diisi ulang</p>
           </div>
         </div>
       )}
@@ -529,8 +529,8 @@ export function SmartPrediction() {
           {/* Forecast Chart (INTEGRATED UI/UX HERE) */}
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="mb-6">
-              <h2 className="text-xl font-medium text-slate-900 mb-1">Sales Forecast</h2>
-              <p className="text-sm text-slate-500">Historical data vs AI predictions with event markers</p>
+              <h2 className="text-xl font-medium text-slate-900 mb-1">Prediksi Penjualan</h2>
+              <p className="text-sm text-slate-500">Data historis vs prediksi AI dengan penanda acara</p>
             </div>
             <ResponsiveContainer width="100%" height={400}>
               <ComposedChart data={predictionData}>
@@ -570,7 +570,7 @@ export function SmartPrediction() {
                   dataKey="historical"
                   stroke="#334155"
                   strokeWidth={2.5}
-                  name="Historical Sales"
+                  name="Penjualan Historis"
                   dot={{ r: 3, fill: '#334155' }}
                   activeDot={{ r: 6 }}
                   connectNulls={false}
@@ -585,7 +585,7 @@ export function SmartPrediction() {
                   strokeDasharray="5 5"
                   fill="url(#colorPredicted)"
                   fillOpacity={1}
-                  name="AI Forecast"
+                  name="Prediksi AI"
                   dot={false}
                   connectNulls={true}
                 />
@@ -619,13 +619,13 @@ export function SmartPrediction() {
             <div className="mt-6 flex flex-wrap items-center gap-4 text-sm bg-slate-50 p-3 rounded-lg border border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-0.5 bg-slate-700"></div>
-                <span className="text-slate-600 text-xs">Past Sales (Fact)</span>
+                <span className="text-slate-600 text-xs">Penjualan Historis</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex items-center">
                    <div className="w-6 h-0.5 bg-indigo-600 border-t border-dashed"></div>
                 </div>
-                <span className="text-slate-600 text-xs">AI Forecast (Est.)</span>
+                <span className="text-slate-600 text-xs">Prediksi AI</span>
               </div>
               <div className="w-px h-4 bg-slate-300 mx-2"></div>
               {/* Event Legend */}
@@ -651,8 +651,8 @@ export function SmartPrediction() {
           {/* Restock Recommendations */}
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="mb-6">
-              <h2 className="text-xl font-medium text-slate-900 mb-1">Restock Recommendations</h2>
-              <p className="text-sm text-slate-500">Products predicted to spike in demand</p>
+              <h2 className="text-xl font-medium text-slate-900 mb-1">Rekomendasi Pengisian Stok</h2>
+              <p className="text-sm text-slate-500">Produk yang diprediksi akan melonjak permintaannya</p>
             </div>
             <div className="space-y-3">
               {restockRecommendations.map((item) => (
@@ -676,13 +676,13 @@ export function SmartPrediction() {
                         </span>
                       )}
                       <span className="flex items-center gap-1">
-                        <span className="font-medium text-slate-700">Current:</span> {item.currentStock}
+                        <span className="font-medium text-slate-700">Saat ini:</span> {item.currentStock}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="font-medium text-slate-700">Predicted:</span> {item.predictedDemand}
+                        <span className="font-medium text-slate-700">Prediksi:</span> {item.predictedDemand}
                       </span>
                       <span className="text-indigo-600 font-medium flex items-center gap-1">
-                        <span className="font-medium">Restock:</span> +{item.recommendedRestock}
+                        <span className="font-medium">Isi ulang:</span> +{item.recommendedRestock}
                       </span>
                     </div>
                   </div>
@@ -694,12 +694,12 @@ export function SmartPrediction() {
                     {restockingProduct === item.productId ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Processing...
+                        Memproses...
                       </>
                     ) : (
                       <>
                         <Package className="w-4 h-4" />
-                        Restock Now
+                        Isi Stok Sekarang
                       </>
                     )}
                   </Button>
@@ -711,8 +711,8 @@ export function SmartPrediction() {
           {eventAnnotations.length > 0 && (
             <div className="bg-white rounded-xl p-6 border border-slate-200">
               <div className="mb-6">
-                <h2 className="text-xl font-medium text-slate-900 mb-1">Event Timeline</h2>
-                <p className="text-sm text-slate-500">AI considers these promotions, holidays & events in predictions</p>
+                <h2 className="text-xl font-medium text-slate-900 mb-1">Jadwal Acara</h2>
+                <p className="text-sm text-slate-500">AI mempertimbangkan promosi, hari libur & acara ini dalam prediksi</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {eventAnnotations.slice(0, 6).map((event) => {
@@ -753,8 +753,8 @@ export function SmartPrediction() {
         <div className="lg:col-span-3">
           <div className="bg-white rounded-xl border border-slate-200 sticky top-24">
             <div className="p-6 border-b border-slate-200">
-              <h2 className="text-xl font-medium text-slate-900 mb-1">Smart Insights</h2>
-              <p className="text-sm text-slate-500">Ask questions about your forecast</p>
+              <h2 className="text-xl font-medium text-slate-900 mb-1">Wawasan Cerdas</h2>
+              <p className="text-sm text-slate-500">Tanyakan tentang prediksi Anda</p>
             </div>
 
             <div className="p-6 max-h-96 overflow-y-auto space-y-3">
@@ -770,7 +770,7 @@ export function SmartPrediction() {
                   {message.role === 'assistant' && (
                     <div className="flex items-center gap-2 mb-2">
                       <Sparkles className="w-4 h-4 text-indigo-600" />
-                      <span className="text-xs font-medium text-indigo-600">AI Assistant</span>
+                      <span className="text-xs font-medium text-indigo-600">Asisten AI</span>
                     </div>
                   )}
                   <p className="text-sm leading-relaxed">{message.content}</p>
@@ -781,7 +781,7 @@ export function SmartPrediction() {
             <div className="p-6 border-t border-slate-200">
               {/* Quick Prompts */}
               <div className="mb-4">
-                <p className="text-sm font-medium text-slate-700 mb-3">Quick Questions</p>
+                <p className="text-sm font-medium text-slate-700 mb-3">Pertanyaan Cepat</p>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     onClick={() => {
@@ -800,7 +800,7 @@ export function SmartPrediction() {
                     size="sm"
                     className="text-xs rounded-full border-indigo-200 text-indigo-700 hover:bg-indigo-50"
                   >
-                    Which items need restock? <ChevronRight className="w-3 h-3" />
+                    Barang mana yang perlu diisi ulang? <ChevronRight className="w-3 h-3" />
                   </Button>
                   <Button
                     onClick={() => {
@@ -819,7 +819,7 @@ export function SmartPrediction() {
                     size="sm"
                     className="text-xs rounded-full border-purple-200 text-purple-700 hover:bg-purple-50"
                   >
-                    Why is demand increasing? <ChevronRight className="w-3 h-3" />
+                    Mengapa permintaan meningkat? <ChevronRight className="w-3 h-3" />
                   </Button>
                   <Button
                     onClick={() => {
@@ -836,7 +836,7 @@ export function SmartPrediction() {
                     size="sm"
                     className="text-xs rounded-full border-green-200 text-green-700 hover:bg-green-50"
                   >
-                    Top priorities <ChevronRight className="w-3 h-3" />
+                    Prioritas utama <ChevronRight className="w-3 h-3" />
                   </Button>
                 </div>
               </div>
@@ -848,7 +848,7 @@ export function SmartPrediction() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  placeholder="Ask about predictions..."
+                  placeholder="Tanyakan tentang prediksi..."
                   className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-sm"
                 />
                 <Button

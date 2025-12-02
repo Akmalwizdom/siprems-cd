@@ -5,6 +5,7 @@ import {
   TrendingUp, Clock, History, AlertTriangle, Trash2
 } from 'lucide-react';
 import { useStore, type CalendarEvent } from '../context/StoreContext';
+import { formatIDR } from '../utils/currency';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -39,28 +40,28 @@ const eventTypeConfig: Record<string, {
 }> = {
   promotion: { 
     color: 'bg-blue-500', 
-    label: 'Promotion', 
+    label: 'Promosi', 
     bgLight: 'bg-blue-50', 
     textColor: 'text-blue-700', 
     borderColor: 'border-blue-200' 
   },
   holiday: { 
     color: 'bg-purple-500', 
-    label: 'Holiday', 
+    label: 'Hari Libur', 
     bgLight: 'bg-purple-50', 
     textColor: 'text-purple-700', 
     borderColor: 'border-purple-200' 
   },
   'store-closed': { 
     color: 'bg-red-500', 
-    label: 'Store Closed', 
+    label: 'Toko Tutup', 
     bgLight: 'bg-red-50', 
     textColor: 'text-red-700', 
     borderColor: 'border-red-200' 
   },
   event: { 
     color: 'bg-green-500', 
-    label: 'Event', 
+    label: 'Acara', 
     bgLight: 'bg-green-50', 
     textColor: 'text-green-700', 
     borderColor: 'border-green-200' 
@@ -360,7 +361,7 @@ export function CalendarImproved() {
   };
 
   const handleDeleteEvent = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this event?')) return;
+    if (!confirm('Apakah Anda yakin ingin menghapus acara ini?')) return;
     
     try {
       const response = await fetch(`${API_BASE_URL}/events/${id}`, {
@@ -447,13 +448,13 @@ export function CalendarImproved() {
 
   const formatHeader = () => {
     if (viewMode === 'month') {
-      return currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      return currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
     }
     if (viewMode === 'week') {
       const weekDays = getWeekDays(currentDate);
-      return `${weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      return `${weekDays[0].toLocaleDateString('id-ID', { month: 'short', day: 'numeric' })} - ${weekDays[6].toLocaleDateString('id-ID', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     }
-    return currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    return currentDate.toLocaleDateString('id-ID', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   };
 
   const renderMonthView = () => {
@@ -539,7 +540,7 @@ export function CalendarImproved() {
     return (
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="grid grid-cols-7 border-b border-slate-200">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+          {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((day) => (
             <div key={day} className="p-3 bg-slate-50 text-center text-slate-700 border-r border-slate-200 last:border-r-0">
               {day}
             </div>
@@ -572,7 +573,7 @@ export function CalendarImproved() {
             onClick={() => setCurrentDate(new Date())}
             className="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
           >
-            Today
+            Hari Ini
           </button>
         </div>
 
@@ -587,7 +588,7 @@ export function CalendarImproved() {
             className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
-            Add Event
+            Tambah Acara
           </button>
         </div>
       </div>
@@ -602,7 +603,7 @@ export function CalendarImproved() {
         ))}
         <div className="flex items-center gap-2 ml-auto">
           <Sparkles className="w-4 h-4 text-indigo-600" />
-          <span className="text-slate-700 text-sm">AI Suggested</span>
+          <span className="text-slate-700 text-sm">Saran AI</span>
         </div>
       </div>
 
@@ -626,7 +627,7 @@ export function CalendarImproved() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-slate-900">{isEditMode ? 'Edit Event' : 'Add Event'}</h2>
+              <h2 className="text-slate-900">{isEditMode ? 'Edit Acara' : 'Tambah Acara'}</h2>
               <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -634,9 +635,9 @@ export function CalendarImproved() {
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-slate-700 mb-2">Event Date</label>
+                <label className="block text-slate-700 mb-2">Tanggal Acara</label>
                 <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg">
-                  {selectedDate?.toLocaleDateString('en-US', {
+                  {selectedDate?.toLocaleDateString('id-ID', {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',
@@ -646,21 +647,21 @@ export function CalendarImproved() {
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-2">Event Title *</label>
+                <label className="block text-slate-700 mb-2">Judul Acara *</label>
                 <input
                   type="text"
                   required
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g., 50% Off Sale"
+                  placeholder="contoh: Diskon 50%"
                 />
               </div>
 
               {isLoadingAI && (
                 <div className="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-4 py-3 rounded-lg">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">AI is analyzing your event...</span>
+                  <span className="text-sm">AI sedang menganalisis acara Anda...</span>
                 </div>
               )}
 
@@ -670,7 +671,7 @@ export function CalendarImproved() {
                     <Sparkles className={`w-5 h-5 ${aiSuggestion.warning ? 'text-yellow-600' : 'text-indigo-600'} flex-shrink-0 mt-0.5`} />
                     <div className="flex-1">
                       <h3 className={`font-medium ${aiSuggestion.warning ? 'text-yellow-900' : 'text-indigo-900'} mb-1`}>
-                        AI Suggestion {aiSuggestion.warning && '⚠️'}
+                        Saran AI {aiSuggestion.warning && '⚠️'}
                       </h3>
                       <p className="text-sm text-slate-700 mb-2">{aiSuggestion.rationale}</p>
                       {aiSuggestion.warning_message && (
@@ -681,17 +682,17 @@ export function CalendarImproved() {
                       )}
                       <div className="flex items-center gap-4 text-sm">
                         <div>
-                          <span className="text-slate-600">Category: </span>
+                          <span className="text-slate-600">Kategori: </span>
                           <span className={`font-medium px-2 py-1 rounded ${getEventConfig(aiSuggestion.suggested_category).bgLight} ${getEventConfig(aiSuggestion.suggested_category).textColor}`}>
                             {getEventConfig(aiSuggestion.suggested_category).label}
                           </span>
                         </div>
                         <div>
-                          <span className="text-slate-600">Impact: </span>
+                          <span className="text-slate-600">Dampak: </span>
                           <span className="font-medium">{aiSuggestion.suggested_impact.toFixed(2)}</span>
                         </div>
                         <div>
-                          <span className="text-slate-600">Confidence: </span>
+                          <span className="text-slate-600">Keyakinan: </span>
                           <span className={`font-medium ${aiSuggestion.confidence >= 0.8 ? 'text-green-600' : aiSuggestion.confidence >= 0.6 ? 'text-yellow-600' : 'text-red-600'}`}>
                             {(aiSuggestion.confidence * 100).toFixed(0)}%
                           </span>
@@ -709,10 +710,10 @@ export function CalendarImproved() {
                         handleAcceptSuggestion();
                       }}
                       className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors shadow-md font-medium"
-                      title="Use AI-suggested category & impact"
+                      title="Gunakan saran AI untuk kategori & dampak"
                     >
                       <CheckCircle className="w-5 h-5" />
-                      <span className="text-base">Accept</span>
+                      <span className="text-base">Terima</span>
                     </button>
                     <button
                       type="button"
@@ -722,7 +723,7 @@ export function CalendarImproved() {
                         handleEditSuggestion();
                       }}
                       className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors shadow-md font-medium"
-                      title="Modify event before saving"
+                      title="Ubah acara sebelum menyimpan"
                     >
                       <Edit3 className="w-5 h-5" />
                       <span className="text-base">Edit</span>
@@ -735,32 +736,32 @@ export function CalendarImproved() {
                         handleRejectSuggestion(e);
                       }}
                       className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-colors shadow-md font-medium"
-                      title="Cancel without saving"
+                      title="Batalkan tanpa menyimpan"
                     >
                       <XCircle className="w-5 h-5" />
-                      <span className="text-base">Reject</span>
+                      <span className="text-base">Tolak</span>
                     </button>
                   </div>
                 </div>
               )}
 
               <div>
-                <label className="block text-slate-700 mb-2">Event Type *</label>
+                <label className="block text-slate-700 mb-2">Jenis Acara *</label>
                 <select
                   required
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as CalendarEvent['type'] })}
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="promotion">Promotion</option>
-                  <option value="holiday">Holiday</option>
-                  <option value="store-closed">Store Closed</option>
-                  <option value="event">Event</option>
+                  <option value="promotion">Promosi</option>
+                  <option value="holiday">Hari Libur</option>
+                  <option value="store-closed">Toko Tutup</option>
+                  <option value="event">Acara</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-2">Impact Weight (optional)</label>
+                <label className="block text-slate-700 mb-2">Bobot Dampak (opsional)</label>
                 <input
                   type="number"
                   step="0.1"
@@ -769,18 +770,18 @@ export function CalendarImproved() {
                   value={formData.impact || ''}
                   onChange={(e) => setFormData({ ...formData, impact: parseFloat(e.target.value) || null })}
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="0.0 - 2.0 (leave blank for AI suggestion)"
+                  placeholder="0.0 - 2.0 (kosongkan untuk saran AI)"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-2">Description</label>
+                <label className="block text-slate-700 mb-2">Deskripsi</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                   rows={3}
-                  placeholder="Additional details..."
+                  placeholder="Detail tambahan..."
                 ></textarea>
               </div>
 
@@ -791,14 +792,14 @@ export function CalendarImproved() {
                     onClick={closeModal}
                     className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
                   >
-                    Cancel
+                    Batal
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       // User chose to continue without AI suggestion or after editing
                       if (!formData.title) {
-                        alert('Please enter an event title');
+                        alert('Silakan masukkan judul acara');
                         return;
                       }
                       setShowConfirmModal(true);
@@ -806,7 +807,7 @@ export function CalendarImproved() {
                     className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!formData.title}
                   >
-                    Continue
+                    Lanjutkan
                   </button>
                 </div>
               )}
@@ -820,17 +821,17 @@ export function CalendarImproved() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full">
             <div className="p-6 border-b border-slate-200">
-              <h2 className="text-slate-900">Confirm Event</h2>
+              <h2 className="text-slate-900">Konfirmasi Acara</h2>
             </div>
 
             <div className="p-6 space-y-4">
               <div>
-                <p className="text-sm text-slate-600 mb-2">You are creating:</p>
+                <p className="text-sm text-slate-600 mb-2">Anda akan membuat:</p>
                 <div className="bg-slate-50 rounded-lg p-4 space-y-2">
-                  <div><span className="font-medium">Title:</span> {formData.title}</div>
-                  <div><span className="font-medium">Type:</span> {getEventConfig(formData.type).label}</div>
-                  <div><span className="font-medium">Impact:</span> {formData.impact?.toFixed(2) || 'Default'}</div>
-                  <div><span className="font-medium">Decision:</span> {userDecision?.toUpperCase()}</div>
+                  <div><span className="font-medium">Judul:</span> {formData.title}</div>
+                  <div><span className="font-medium">Jenis:</span> {getEventConfig(formData.type).label}</div>
+                  <div><span className="font-medium">Dampak:</span> {formData.impact?.toFixed(2) || 'Default'}</div>
+                  <div><span className="font-medium">Keputusan:</span> {userDecision?.toUpperCase()}</div>
                 </div>
               </div>
 
@@ -839,13 +840,13 @@ export function CalendarImproved() {
                   onClick={() => setShowConfirmModal(false)}
                   className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
                 >
-                  Back
+                  Kembali
                 </button>
                 <button
                   onClick={handleConfirmEvent}
                   className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                 >
-                  Confirm & Save
+                  Konfirmasi & Simpan
                 </button>
               </div>
             </div>
@@ -919,11 +920,11 @@ export function CalendarImproved() {
                         <div className="grid grid-cols-3 gap-3 text-xs">
                           <div>
                             <span className="text-slate-500">Actual Sales:</span>
-                            <div className="font-medium">${cal.actual_sales.toFixed(0)}</div>
+                            <div className="font-medium">{formatIDR(cal.actual_sales)}</div>
                           </div>
                           <div>
                             <span className="text-slate-500">Baseline:</span>
-                            <div className="font-medium">${cal.baseline_sales.toFixed(0)}</div>
+                            <div className="font-medium">{formatIDR(cal.baseline_sales)}</div>
                           </div>
                           <div>
                             <span className="text-slate-500">Effect:</span>

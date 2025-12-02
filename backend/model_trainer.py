@@ -21,6 +21,7 @@ from prophet import Prophet
 from prophet.serialize import model_to_json, model_from_json
 from sqlalchemy import create_engine, text
 from sklearn.preprocessing import StandardScaler
+from timezone_utils import get_current_time_wib, get_current_date_wib, wib_isoformat
 
 from config import (
     TRAINING_WINDOW_DAYS, MIN_TRAINING_DAYS, VALIDATION_DAYS,
@@ -227,7 +228,7 @@ class ModelTrainer:
     def fetch_training_data(self, end_date: Optional[date] = None) -> pd.DataFrame:
         """Fetch last 180 days of transaction data"""
         if end_date is None:
-            end_date = datetime.now().date()
+            end_date = get_current_date_wib()
         
         start_date = end_date - timedelta(days=TRAINING_WINDOW_DAYS)
         
@@ -296,7 +297,7 @@ class ModelTrainer:
         
         # Data freshness
         last_date = df['ds'].max().date()
-        data_age = (datetime.now().date() - last_date).days
+        data_age = (get_current_date_wib() - last_date).days
         quality_report["data_age_days"] = data_age
         
         logger.info(f"Data quality: {quality_report}")
@@ -410,9 +411,9 @@ class ModelTrainer:
         train_df = df_scaled[train_cols].copy().rename(columns={'y_log': 'y'})
         
         logger.info(f"Training on {len(train_df)} days...")
-        start_time = datetime.now()
+        start_time = get_current_time_wib()
         model.fit(train_df)
-        training_time = (datetime.now() - start_time).total_seconds()
+        training_time = (get_current_time_wib() - start_time).total_seconds()
         logger.info(f"Training completed in {training_time:.1f}s")
         
         # === BUILD METADATA ===
@@ -436,7 +437,7 @@ class ModelTrainer:
             "quality_report": quality_report,
             "training_time_seconds": round(training_time, 1),
             "model_version": self._generate_model_version(),
-            "saved_at": datetime.utcnow().isoformat()
+            "saved_at": wib_isoformat()
         }
         
         # === CALCULATE ACCURACY ===
@@ -578,7 +579,7 @@ class ModelTrainer:
         model_path = f"{self.model_dir}/store_{store_id}.json"
         meta_path = f"{self.model_dir}/store_{store_id}_meta.json"
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = get_current_time_wib().strftime("%Y%m%d_%H%M%S")
         archive_model = f"{self.model_dir}/history/store_{store_id}_{timestamp}.json"
         archive_meta = f"{self.model_dir}/history/store_{store_id}_{timestamp}_meta.json"
         
@@ -612,12 +613,12 @@ class ModelTrainer:
             logger.warning(f"Cleanup failed: {e}")
     
     def _generate_model_version(self) -> str:
-        return datetime.now().strftime("%Y%m%d_%H%M%S")
+        return get_current_time_wib().strftime("%Y%m%d_%H%M%S")
     
     def _get_model_age_days(self, metadata: Dict) -> int:
         try:
             saved_at = datetime.fromisoformat(metadata.get("saved_at", ""))
-            return (datetime.utcnow() - saved_at).days
+            return (get_current_time_wib().replace(tzinfo=None) - saved_at.replace(tzinfo=None)).days
         except:
             return 999
     
@@ -637,7 +638,7 @@ class ModelTrainer:
             return True, f"Accuracy {accuracy}% < {MIN_ACCURACY_THRESHOLD}%"
         
         end_date = datetime.fromisoformat(metadata.get("end_date", "")).date()
-        data_age = (datetime.now().date() - end_date).days
+        data_age = (get_current_date_wib() - end_date).days
         if data_age > 3:
             return True, f"Data is {data_age} days old"
         

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, Upload, X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '../types';
+import { formatIDR } from '../utils/currency';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -166,7 +167,7 @@ export function Products() {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this product?')) {
+    if (confirm('Apakah Anda yakin ingin menghapus produk ini?')) {
       setProducts(filteredProducts.filter((p) => p.id !== id));
     }
   };
@@ -183,15 +184,15 @@ export function Products() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-slate-900 mb-1">Products</h1>
-          <p className="text-slate-500">Manage your inventory</p>
+          <h1 className="text-slate-900 mb-1">Produk</h1>
+          <p className="text-slate-500">Kelola inventaris Anda</p>
         </div>
         <button
           onClick={() => openModal()}
           className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
         >
           <Plus className="w-5 h-5" />
-          Add Product
+          Tambah Produk
         </button>
       </div>
 
@@ -203,7 +204,7 @@ export function Products() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search products..."
+              placeholder="Cari produk..."
               className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
@@ -231,19 +232,19 @@ export function Products() {
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 text-left text-slate-700">Product Name</th>
-                <th className="px-6 py-4 text-left text-slate-700">Category</th>
-                <th className="px-6 py-4 text-left text-slate-700">Cost Price</th>
-                <th className="px-6 py-4 text-left text-slate-700">Selling Price</th>
-                <th className="px-6 py-4 text-left text-slate-700">Stock</th>
-                <th className="px-6 py-4 text-left text-slate-700">Actions</th>
+                <th className="px-6 py-4 text-left text-slate-700">Nama Produk</th>
+                <th className="px-6 py-4 text-left text-slate-700">Kategori</th>
+                <th className="px-6 py-4 text-left text-slate-700">Harga Modal</th>
+                <th className="px-6 py-4 text-left text-slate-700">Harga Jual</th>
+                <th className="px-6 py-4 text-left text-slate-700">Stok</th>
+                <th className="px-6 py-4 text-left text-slate-700">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                    No products found
+                    Produk tidak ditemukan
                   </td>
                 </tr>
               ) : (
@@ -262,8 +263,8 @@ export function Products() {
                       {product.category}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-900">${product.costPrice}</td>
-                  <td className="px-6 py-4 text-slate-900">${product.sellingPrice}</td>
+                  <td className="px-6 py-4 text-slate-900">{formatIDR(product.costPrice)}</td>
+                  <td className="px-6 py-4 text-slate-900">{formatIDR(product.sellingPrice)}</td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full ${getStockColor(product.stock)}`}>
                       {product.stock}
@@ -296,7 +297,7 @@ export function Products() {
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
             <span className="text-sm text-slate-500">
-              Showing {filteredProducts.length > 0 ? (page - 1) * limit + 1 : 0} to {Math.min(page * limit, totalItems)} of {totalItems} products
+              Menampilkan {filteredProducts.length > 0 ? (page - 1) * limit + 1 : 0} sampai {Math.min(page * limit, totalItems)} dari {totalItems} produk
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -307,7 +308,7 @@ export function Products() {
                 <ChevronLeft className="w-4 h-4 text-slate-600" />
               </button>
               <span className="text-sm text-slate-600">
-                Page {page} of {totalPages}
+                Halaman {page} dari {totalPages}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -327,7 +328,7 @@ export function Products() {
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
               <h2 className="text-slate-900">
-                {editingProduct ? 'Edit Product' : 'Add New Product'}
+                {editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}
               </h2>
               <button
                 onClick={closeModal}
@@ -339,37 +340,37 @@ export function Products() {
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-slate-700 mb-2">Product Name *</label>
+                <label className="block text-slate-700 mb-2">Nama Produk *</label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Enter product name"
+                  placeholder="Masukkan nama produk"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-2">Category *</label>
+                <label className="block text-slate-700 mb-2">Kategori *</label>
                 <select
                   required
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">Select category</option>
-                  <option value="Electronics">Electronics</option>
-                  <option value="Home & Kitchen">Home & Kitchen</option>
-                  <option value="Stationery">Stationery</option>
-                  <option value="Sports">Sports</option>
+                  <option value="">Pilih kategori</option>
+                  <option value="Electronics">Elektronik</option>
+                  <option value="Home & Kitchen">Rumah & Dapur</option>
+                  <option value="Stationery">Alat Tulis</option>
+                  <option value="Sports">Olahraga</option>
                   <option value="Fashion">Fashion</option>
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-700 mb-2">Cost Price *</label>
+                  <label className="block text-slate-700 mb-2">Harga Modal *</label>
                   <input
                     type="number"
                     required
@@ -380,12 +381,12 @@ export function Products() {
                       setFormData({ ...formData, costPrice: parseFloat(e.target.value) })
                     }
                     className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="0.00"
+                    placeholder="0"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 mb-2">Selling Price *</label>
+                  <label className="block text-slate-700 mb-2">Harga Jual *</label>
                   <input
                     type="number"
                     required
@@ -396,13 +397,13 @@ export function Products() {
                       setFormData({ ...formData, sellingPrice: parseFloat(e.target.value) })
                     }
                     className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="0.00"
+                    placeholder="0"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-2">Stock Quantity *</label>
+                <label className="block text-slate-700 mb-2">Jumlah Stok *</label>
                 <input
                   type="number"
                   required
@@ -415,7 +416,7 @@ export function Products() {
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-2">Product Image</label>
+                <label className="block text-slate-700 mb-2">Gambar Produk</label>
                 <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 hover:border-indigo-500 transition-colors">
                   <input
                     type="file"
@@ -438,8 +439,8 @@ export function Products() {
                       </div>
                     ) : (
                       <div className="text-center">
-                        <p className="text-slate-700">Click to upload or drag and drop</p>
-                        <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5MB</p>
+                        <p className="text-slate-700">Klik untuk unggah atau seret file</p>
+                        <p className="text-xs text-slate-500 mt-1">PNG, JPG maksimal 5MB</p>
                       </div>
                     )}
                   </label>
@@ -447,13 +448,13 @@ export function Products() {
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-2">Description</label>
+                <label className="block text-slate-700 mb-2">Deskripsi</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                   rows={3}
-                  placeholder="Enter product description"
+                  placeholder="Masukkan deskripsi produk"
                 ></textarea>
               </div>
 
@@ -463,13 +464,13 @@ export function Products() {
                   onClick={closeModal}
                   className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
                 >
-                  Cancel
+                  Batal
                 </button>
                 <button
                   type="submit"
                   className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                 >
-                  {editingProduct ? 'Update Product' : 'Add Product'}
+                  {editingProduct ? 'Perbarui Produk' : 'Tambah Produk'}
                 </button>
               </div>
             </form>
