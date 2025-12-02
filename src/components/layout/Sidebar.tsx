@@ -56,11 +56,11 @@ export function Sidebar() {
         <div className="text-white mb-3">
           <h3>Upgrade Pro</h3>
           <p className="text-xs text-slate-400 mt-1">
-            Unlock full features and get unlimited access
+            Unlock all features and get unlimited access
           </p>
         </div>
         <button className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition-colors">
-          Upgrade $30
+          Upgrade Rp450.000
         </button>
       </div>
     </aside>

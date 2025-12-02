@@ -66,7 +66,7 @@ class GeminiService {
     } catch (error) {
       console.error('AI Gateway error:', error);
       return {
-        response: 'Sorry, I encountered an error connecting to the AI service. Please try again.',
+        response: 'Maaf, terjadi kesalahan saat menghubungi layanan AI. Silakan coba lagi.',
         action: {
           type: 'none',
           needsConfirmation: false

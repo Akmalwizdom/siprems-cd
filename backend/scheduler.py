@@ -7,15 +7,20 @@ from typing import Callable
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
+from timezone_utils import get_current_time_wib
 
 from config import (
     AUTO_RETRAIN_ENABLED,
     RETRAIN_SCHEDULE,
     RETRAIN_TIME,
-    RETRAIN_ON_ACCURACY_DROP
+    RETRAIN_ON_ACCURACY_DROP,
+    TIMEZONE
 )
 
 logger = logging.getLogger(__name__)
+
+# Timezone for scheduler - Asia/Jakarta (WIB)
+WIB_TZ = pytz.timezone(TIMEZONE)
 
 
 class RetrainingScheduler:
@@ -24,7 +29,7 @@ class RetrainingScheduler:
     """
     
     def __init__(self):
-        self.scheduler = BackgroundScheduler(timezone=pytz.UTC)
+        self.scheduler = BackgroundScheduler(timezone=WIB_TZ)
         self.retrain_callback = None
         self.is_running = False
     
@@ -59,11 +64,11 @@ class RetrainingScheduler:
         if RETRAIN_SCHEDULE == "daily":
             # Run daily at specified time
             trigger = CronTrigger(hour=hour, minute=minute)
-            logger.info(f"Scheduling daily retraining at {RETRAIN_TIME} UTC")
+            logger.info(f"Scheduling daily retraining at {RETRAIN_TIME} WIB")
         elif RETRAIN_SCHEDULE == "weekly":
             # Run every Monday at specified time
             trigger = CronTrigger(day_of_week='mon', hour=hour, minute=minute)
-            logger.info(f"Scheduling weekly retraining on Mondays at {RETRAIN_TIME} UTC")
+            logger.info(f"Scheduling weekly retraining on Mondays at {RETRAIN_TIME} WIB")
         else:
             logger.warning(f"Unknown schedule: {RETRAIN_SCHEDULE}, using daily")
             trigger = CronTrigger(hour=hour, minute=minute)
@@ -93,13 +98,13 @@ class RetrainingScheduler:
             store_id: Store ID to retrain
         """
         logger.info(f"[SCHEDULER] Starting automatic retraining for store {store_id}")
-        start_time = datetime.now()
+        start_time = get_current_time_wib()
         
         try:
             result = self.retrain_callback(store_id)
             
             if result:
-                elapsed = (datetime.now() - start_time).total_seconds()
+                elapsed = (get_current_time_wib() - start_time).total_seconds()
                 accuracy = result.get("accuracy", 0)
                 logger.info(
                     f"[SCHEDULER] Retraining completed for store {store_id} - "

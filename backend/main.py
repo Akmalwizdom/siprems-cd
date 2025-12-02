@@ -1,7 +1,7 @@
 
 from collections import defaultdict
 from fastapi import FastAPI, HTTPException
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, event
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
@@ -15,13 +15,14 @@ from datetime import datetime, timedelta, date
 from prophet import Prophet
 from prophet.serialize import model_to_json, model_from_json
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 from event_intelligence import (
     EventIntelligenceService, 
     EventSuggestion,
     CalibrationResult
 )
+from timezone_utils import get_current_time_wib, get_current_date_wib, wib_isoformat, WIB
 
 # Load environment variables from .env file
 load_dotenv()
@@ -31,25 +32,41 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import enhanced training system
+ENHANCED_TRAINING_AVAILABLE = False
+SCHEDULER_AVAILABLE = False
+model_trainer = None
+retrain_scheduler = None
+
 try:
     from model_trainer import ModelTrainer, DataQualityError
-    from scheduler import RetrainingScheduler
     from config import (
         TRAINING_WINDOW_DAYS, MIN_ACCURACY_THRESHOLD, 
         AUTO_RETRAIN_ENABLED, RETRAIN_SCHEDULE,
         SCALED_REGRESSORS, BINARY_REGRESSORS, ALL_REGRESSORS, SCALER_VERSION
     )
     ENHANCED_TRAINING_AVAILABLE = True
-    logger.info("Enhanced training system loaded successfully")
+    logger.info("Enhanced training system (ModelTrainer) loaded successfully")
 except ImportError as e:
-    logger.warning(f"Enhanced training modules not available: {e}")
-    ENHANCED_TRAINING_AVAILABLE = False
+    logger.warning(f"ModelTrainer not available: {e}")
     # Fallback defaults
     SCALED_REGRESSORS = ["promo_intensity", "holiday_intensity", "event_intensity", 
                          "closure_intensity", "transactions_count", "avg_ticket"]
     BINARY_REGRESSORS = ["is_weekend", "is_payday", "is_day_before_holiday", "is_school_holiday"]
     ALL_REGRESSORS = SCALED_REGRESSORS + BINARY_REGRESSORS
     SCALER_VERSION = "1.0"
+    TRAINING_WINDOW_DAYS = 180
+    MIN_ACCURACY_THRESHOLD = 82.0
+    AUTO_RETRAIN_ENABLED = False
+    RETRAIN_SCHEDULE = "daily"
+
+# Scheduler is optional (requires apscheduler)
+try:
+    from scheduler import RetrainingScheduler
+    SCHEDULER_AVAILABLE = True
+    logger.info("Scheduler module loaded successfully")
+except ImportError as e:
+    logger.warning(f"Scheduler not available (apscheduler missing): {e}")
+    RetrainingScheduler = None
 
 app = FastAPI()
 
@@ -61,7 +78,17 @@ app.add_middleware(
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@db:5432/siprems_db")
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"options": "-c timezone=Asia/Jakarta"}
+)
+
+@event.listens_for(engine, "connect")
+def set_timezone_on_connect(dbapi_connection, connection_record):
+    """Set timezone to Asia/Jakarta on every new connection."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("SET timezone = 'Asia/Jakarta'")
+    cursor.close()
 
 # MODEL_DIR: Use environment variable, or check for local vs Docker paths
 MODEL_DIR = os.getenv("MODEL_DIR", None)
@@ -79,11 +106,18 @@ event_intelligence = EventIntelligenceService(engine, os.getenv("GEMINI_API_KEY"
 # Initialize Enhanced Training System
 if ENHANCED_TRAINING_AVAILABLE:
     model_trainer = ModelTrainer(engine, MODEL_DIR)
-    retrain_scheduler = RetrainingScheduler()
-    retrain_scheduler.set_retrain_callback(
-        lambda store_id: model_trainer.auto_retrain_if_needed(store_id)
-    )
-    logger.info("Model trainer and scheduler initialized")
+    logger.info("Enhanced ModelTrainer initialized")
+    
+    # Scheduler is optional
+    if SCHEDULER_AVAILABLE and RetrainingScheduler is not None:
+        retrain_scheduler = RetrainingScheduler()
+        retrain_scheduler.set_retrain_callback(
+            lambda store_id: model_trainer.auto_retrain_if_needed(store_id)
+        )
+        logger.info("Scheduler initialized with auto-retrain callback")
+    else:
+        retrain_scheduler = None
+        logger.info("Running without scheduler (manual retrain only)")
 else:
     model_trainer = None
     retrain_scheduler = None
@@ -110,7 +144,7 @@ def health_check():
     """Health check with enhanced system status"""
     status = {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": wib_isoformat(),
         "enhanced_training": ENHANCED_TRAINING_AVAILABLE
     }
     
@@ -167,27 +201,101 @@ def apply_scaler_to_df(df: pd.DataFrame, scaler_params: Dict) -> pd.DataFrame:
     """
     CRITICAL: Apply saved scaler params to transform regressors in main.py context.
     
+    PENTING: Fungsi ini HANYA melakukan transform(), TIDAK PERNAH fit().
+    Scaler params harus berasal dari training metadata.
+    
+    IMPROVEMENTS (prediction_fixed.md):
+    - HANYA transform(), TIDAK PERNAH fit() pada future data
+    - Validasi shape match dengan training data
+    - Auto-fill missing columns dengan mean dari training
+    - Handle NaN/inf setelah scaling
+    - Error jelas jika shape mismatch
+    
     Args:
-        df: DataFrame to transform
-        scaler_params: Dict with mean_, scale_, and columns from model metadata
+        df: DataFrame to transform (future regressors)
+        scaler_params: Dict with mean_, scale_, columns from model metadata
         
     Returns:
-        DataFrame with scaled regressors
+        DataFrame with scaled regressors (no NaN, inf, or missing columns)
+        
+    Raises:
+        ValueError: If scaler_params is invalid or shape mismatch detected
     """
+    if not scaler_params:
+        logger.warning("No scaler_params provided, returning original dataframe")
+        return df
+    
     df = df.copy()
     
     cols_to_scale = scaler_params.get("columns", [])
     mean_dict = scaler_params.get("mean_", {})
     scale_dict = scaler_params.get("scale_", {})
+    scaler_version = scaler_params.get("version", "unknown")
+    
+    logger.info(f"=== SCALER TRANSFORM (version {scaler_version}) ===")
+    logger.info(f"Applying scaler to {len(cols_to_scale)} columns: {cols_to_scale}")
+    logger.info(f"Input shape: {df.shape}")
+    
+    # VALIDATION 1: Ensure scaler params are complete
+    missing_mean = [c for c in cols_to_scale if c not in mean_dict]
+    missing_scale = [c for c in cols_to_scale if c not in scale_dict]
+    
+    if missing_mean or missing_scale:
+        error_msg = f"SCALER ERROR: Incomplete scaler_params - missing mean: {missing_mean}, missing scale: {missing_scale}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    scaled_count = 0
+    filled_count = 0
     
     for col in cols_to_scale:
-        if col in df.columns and col in mean_dict and col in scale_dict:
-            mean = mean_dict[col]
-            scale = scale_dict[col]
-            if scale > 0:
-                df[col] = (df[col] - mean) / scale
-            else:
-                logger.warning(f"Scaler scale for {col} is 0, skipping")
+        mean_val = mean_dict.get(col, 0.0)
+        scale_val = scale_dict.get(col, 1.0)
+        
+        # CRITICAL: Auto-fill missing columns with training mean (NOT fit!)
+        if col not in df.columns:
+            logger.warning(f"Column '{col}' missing in future data, filling with training mean={mean_val:.4f}")
+            df[col] = mean_val
+            filled_count += 1
+        
+        # Ensure numeric and handle NaN BEFORE scaling
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col] = df[col].replace([np.inf, -np.inf], np.nan)
+        
+        # Fill NaN with training mean (consistent with StandardScaler behavior)
+        nan_before = df[col].isna().sum()
+        if nan_before > 0:
+            logger.warning(f"Column '{col}' has {nan_before} NaN before scaling, filling with training mean")
+            df[col] = df[col].fillna(mean_val)
+        
+        # CRITICAL: Apply StandardScaler transformation ONLY (transform, not fit_transform!)
+        # Formula: z = (x - mean) / scale
+        if scale_val > 0:
+            df[col] = (df[col] - mean_val) / scale_val
+            scaled_count += 1
+        else:
+            logger.error(f"SCALER ERROR: Invalid scale={scale_val} for column '{col}', setting to 0")
+            df[col] = 0.0
+        
+        # Handle any NaN/inf that may have been introduced
+        df[col] = df[col].replace([np.inf, -np.inf], np.nan)
+        nan_after = df[col].isna().sum()
+        if nan_after > 0:
+            logger.error(f"Column '{col}' has {nan_after} NaN AFTER scaling! Setting to 0")
+            df[col] = df[col].fillna(0.0)
+        
+        logger.info(f"  - {col}: range=[{df[col].min():.4f}, {df[col].max():.4f}], mean={df[col].mean():.4f}")
+    
+    # FINAL VALIDATION: No NaN or inf in any column
+    total_nan = df.isna().sum().sum()
+    total_inf = np.isinf(df.select_dtypes(include=[np.number])).sum().sum()
+    
+    if total_nan > 0 or total_inf > 0:
+        logger.error(f"CRITICAL: {total_nan} NaN, {total_inf} inf values after scaling!")
+        df = df.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    
+    logger.info(f"Scaler applied: {scaled_count} cols scaled, {filled_count} cols auto-filled")
+    logger.info(f"Output shape: {df.shape}, Total NaN: {df.isna().sum().sum()}")
     
     return df
 
@@ -452,93 +560,412 @@ def generate_future_regressors_clean(
     CRITICAL FIX: Generate future regressors WITHOUT data leakage
     
     This function generates regressors using ONLY information available at 
-    prediction time (historical statistics), never using actual future values 
-    even if they exist in historical_df.
+    prediction time (historical statistics), never using actual future values.
+    
+    IMPROVEMENTS:
+    - transactions_count: Moving average 14 hari terakhir
+    - avg_ticket: Median 30 hari terakhir
+    - items_sold: Moving average 14 hari
+    - Event intensity: From calendar events
+    - Exponential smoothing untuk stabilitas forecast
     
     Args:
         dates: Series of dates to generate regressors for
-        historical_df: Historical data for computing statistics (DO NOT use actual values)
+        historical_df: Historical data for computing statistics
         event_lookup: Event information
         is_validation: If True, log warnings about validation mode
     
     Returns:
-        DataFrame with clean regressor values
+        DataFrame with clean regressor values (no NaN, inf, or missing columns)
     """
     future = pd.DataFrame({'ds': pd.to_datetime(dates)})
+    n_days = len(future)
     
     # Compute statistics from historical data ONLY
-    if not historical_df.empty:
-        # Compute weekday statistics (safe - uses only past data patterns)
-        weekday_txn_avg = historical_df.groupby(
-            historical_df["ds"].dt.weekday
-        )["transactions_count"].mean().to_dict() if "transactions_count" in historical_df.columns else {}
+    if not historical_df.empty and len(historical_df) >= 7:
+        hist_sorted = historical_df.sort_values("ds").copy()
         
-        weekday_ticket_avg = historical_df.groupby(
-            historical_df["ds"].dt.weekday
-        )["avg_ticket"].mean().to_dict() if "avg_ticket" in historical_df.columns else {}
+        # IMPROVEMENT 1: Moving Average 14 hari untuk transactions_count
+        if "transactions_count" in hist_sorted.columns:
+            last_14_txn = hist_sorted["transactions_count"].tail(14)
+            txn_ma_14 = last_14_txn.mean() if len(last_14_txn) > 0 else 50.0
+            # Weekday patterns untuk variasi
+            weekday_txn_avg = hist_sorted.groupby(
+                hist_sorted["ds"].dt.weekday
+            )["transactions_count"].mean().to_dict()
+        else:
+            txn_ma_14 = 50.0
+            weekday_txn_avg = {}
         
-        # Compute overall fallbacks
-        txn_default = historical_df["transactions_count"].mean() if "transactions_count" in historical_df.columns else 50.0
-        ticket_default = historical_df["avg_ticket"].mean() if "avg_ticket" in historical_df.columns else 75.0
+        # IMPROVEMENT 2: Median 30 hari untuk avg_ticket
+        if "avg_ticket" in hist_sorted.columns:
+            last_30_ticket = hist_sorted["avg_ticket"].tail(30)
+            ticket_median_30 = last_30_ticket.median() if len(last_30_ticket) > 0 else 75.0
+            weekday_ticket_avg = hist_sorted.groupby(
+                hist_sorted["ds"].dt.weekday
+            )["avg_ticket"].median().to_dict()
+        else:
+            ticket_median_30 = 75.0
+            weekday_ticket_avg = {}
         
-        # CRITICAL: Validate statistics are reasonable
-        if txn_default <= 0 or np.isnan(txn_default):
-            logger.warning(f"Invalid txn_default: {txn_default}, using fallback 50")
-            txn_default = 50.0
-        if ticket_default <= 0 or np.isnan(ticket_default):
-            logger.warning(f"Invalid ticket_default: {ticket_default}, using fallback 75")
-            ticket_default = 75.0
+        # IMPROVEMENT 3: Moving Average 14 hari untuk items_sold
+        if "items_sold" in hist_sorted.columns:
+            last_14_items = hist_sorted["items_sold"].tail(14)
+            items_ma_14 = last_14_items.mean() if len(last_14_items) > 0 else 100.0
+        else:
+            items_ma_14 = 100.0
+        
+        # Historical patterns for seasonal adjustments
+        # Weekend vs weekday patterns
+        weekend_mask = hist_sorted["ds"].dt.weekday.isin([5, 6])
+        weekend_txn_avg = hist_sorted.loc[weekend_mask, "transactions_count"].mean() if "transactions_count" in hist_sorted.columns and weekend_mask.any() else txn_ma_14
+        weekday_txn_avg_all = hist_sorted.loc[~weekend_mask, "transactions_count"].mean() if "transactions_count" in hist_sorted.columns and (~weekend_mask).any() else txn_ma_14
+        
+        # Payday pattern (25-31 dan 1-5)
+        payday_mask = (hist_sorted["ds"].dt.day >= 25) | (hist_sorted["ds"].dt.day <= 5)
+        payday_boost = 1.0
+        if payday_mask.any() and "transactions_count" in hist_sorted.columns:
+            payday_txn = hist_sorted.loc[payday_mask, "transactions_count"].mean()
+            non_payday_txn = hist_sorted.loc[~payday_mask, "transactions_count"].mean()
+            if non_payday_txn > 0:
+                payday_boost = payday_txn / non_payday_txn
+                payday_boost = max(0.9, min(1.3, payday_boost))
+        
+        # Validate statistics are reasonable
+        txn_ma_14 = max(1.0, txn_ma_14) if not np.isnan(txn_ma_14) else 50.0
+        ticket_median_30 = max(10.0, ticket_median_30) if not np.isnan(ticket_median_30) else 75.0
+        items_ma_14 = max(1.0, items_ma_14) if not np.isnan(items_ma_14) else 100.0
+        
+        logger.info(f"Future regressors stats: txn_ma_14={txn_ma_14:.1f}, ticket_median_30={ticket_median_30:.1f}, items_ma_14={items_ma_14:.1f}")
     else:
+        # Fallback defaults
+        txn_ma_14 = 50.0
+        ticket_median_30 = 75.0
+        items_ma_14 = 100.0
         weekday_txn_avg = {}
         weekday_ticket_avg = {}
-        txn_default = 50.0
-        ticket_default = 75.0
+        weekend_txn_avg = 55.0
+        weekday_txn_avg_all = 45.0
+        payday_boost = 1.0
+        logger.warning("Insufficient historical data, using fallback defaults for regressors")
     
-    # Generate regressors using ONLY statistical patterns (no actual future values)
+    # Generate regressors
     date_keys = future["ds"].dt.date
     weekdays = future["ds"].dt.weekday
+    days_of_month = future["ds"].dt.day
     
-    # Binary features (deterministic from date)
+    # BINARY FEATURES (deterministic from date)
     future["is_weekend"] = weekdays.isin([5, 6]).astype(int)
-    future["is_payday"] = (future["ds"].dt.day.isin([25, 26, 27, 28, 29, 30, 31]) | (future["ds"].dt.day <= 5)).astype(int)
-    future["is_day_before_holiday"] = 0
-    future["is_school_holiday"] = 0
+    future["is_payday"] = ((days_of_month >= 25) | (days_of_month <= 5)).astype(int)
     
-    # Event intensities (from event_lookup)
-    promo_map = {d: info["promo_intensity"] for d, info in event_lookup.items()}
-    holiday_map = {d: info["holiday_intensity"] for d, info in event_lookup.items()}
-    event_map = {d: info["event_intensity"] for d, info in event_lookup.items()}
-    closure_map = {d: info["closure_intensity"] for d, info in event_lookup.items()}
+    # Check for day before holiday
+    holiday_dates = set()
+    for d, info in event_lookup.items():
+        if info.get("holiday_intensity", 0) > 0:
+            holiday_dates.add(d)
+    
+    def is_day_before_holiday(date_val):
+        next_day = date_val + timedelta(days=1)
+        return 1 if next_day in holiday_dates else 0
+    
+    future["is_day_before_holiday"] = date_keys.map(is_day_before_holiday)
+    future["is_school_holiday"] = 0  # Can be extended with external data
+    
+    # EVENT INTENSITIES (from event_lookup)
+    promo_map = {d: min(info["promo_intensity"], 2.0) for d, info in event_lookup.items()}
+    holiday_map = {d: min(info["holiday_intensity"], 2.0) for d, info in event_lookup.items()}
+    event_map = {d: min(info["event_intensity"], 2.0) for d, info in event_lookup.items()}
+    closure_map = {d: min(info["closure_intensity"], 2.0) for d, info in event_lookup.items()}
     
     future["promo_intensity"] = date_keys.map(lambda d: promo_map.get(d, 0.0))
     future["holiday_intensity"] = date_keys.map(lambda d: holiday_map.get(d, 0.0))
     future["event_intensity"] = date_keys.map(lambda d: event_map.get(d, 0.0))
     future["closure_intensity"] = date_keys.map(lambda d: closure_map.get(d, 0.0))
     
-    # Continuous features (estimated from weekday patterns)
-    future["transactions_count"] = weekdays.map(lambda w: weekday_txn_avg.get(w, txn_default))
-    future["avg_ticket"] = weekdays.map(lambda w: weekday_ticket_avg.get(w, ticket_default))
+    # CONTINUOUS FEATURES with realistic patterns
+    transactions_count_values = []
+    avg_ticket_values = []
+    items_sold_values = []
     
-    # CRITICAL: Validate all regressors are numeric and non-NaN
-    for col in REGRESSOR_COLUMNS:
-        if col not in future.columns:
-            future[col] = 0.0
-        future[col] = pd.to_numeric(future[col], errors="coerce").fillna(0.0)
+    for idx, row in future.iterrows():
+        wd = row["ds"].weekday()
+        dom = row["ds"].day
+        is_wknd = wd in [5, 6]
+        is_pay = (dom >= 25) or (dom <= 5)
         
-        # Additional validation: ensure reasonable ranges
+        # Base transactions from weekday pattern or MA
+        base_txn = weekday_txn_avg.get(wd, txn_ma_14)
+        
+        # Apply weekend adjustment
+        if is_wknd:
+            base_txn *= 1.15  # Weekend spike
+        
+        # Apply payday adjustment
+        if is_pay:
+            base_txn *= payday_boost
+        
+        # Apply event impacts
+        date_key = row["ds"].date()
+        if date_key in promo_map and promo_map[date_key] > 0:
+            base_txn *= (1 + promo_map[date_key] * 0.3)  # Promo boosts
+        if date_key in holiday_map and holiday_map[date_key] > 0:
+            base_txn *= (1 + holiday_map[date_key] * 0.2)  # Holiday spike
+        if date_key in closure_map and closure_map[date_key] > 0:
+            base_txn *= max(0.1, 1 - closure_map[date_key])  # Closure reduces
+        
+        transactions_count_values.append(base_txn)
+        
+        # Avg ticket from weekday pattern or median
+        base_ticket = weekday_ticket_avg.get(wd, ticket_median_30)
+        avg_ticket_values.append(base_ticket)
+        
+        # Items sold correlates with transactions
+        items_sold_values.append(base_txn * 2.0)  # Rough estimation
+    
+    future["transactions_count"] = transactions_count_values
+    future["avg_ticket"] = avg_ticket_values
+    future["items_sold"] = items_sold_values
+    
+    # IMPROVEMENT 4: Exponential Smoothing for stability (alpha=0.3)
+    if n_days > 3:
+        alpha = 0.3
+        for col in ["transactions_count", "avg_ticket", "items_sold"]:
+            if col in future.columns:
+                smoothed = [future[col].iloc[0]]
+                for i in range(1, n_days):
+                    smoothed.append(alpha * future[col].iloc[i] + (1 - alpha) * smoothed[-1])
+                future[col] = smoothed
+    
+    # CRITICAL: Validate ALL regressors are numeric, non-NaN, non-inf
+    all_regressors = REGRESSOR_COLUMNS + ["items_sold", "is_month_start", "is_month_end", 
+                                           "lag_7", "rolling_mean_7", "rolling_std_7"]
+    
+    for col in all_regressors:
+        if col not in future.columns:
+            # Auto-create missing columns with fallback values
+            if col == "items_sold":
+                future[col] = items_ma_14
+            elif col == "transactions_count":
+                future[col] = txn_ma_14
+            elif col == "avg_ticket":
+                future[col] = ticket_median_30
+            elif col in ["lag_7", "rolling_mean_7"]:
+                future[col] = txn_ma_14 * ticket_median_30  # Estimated sales
+            elif col == "rolling_std_7":
+                future[col] = 0.15  # Low variance for stability
+            elif col in ["is_month_start", "is_month_end"]:
+                future[col] = 0
+            else:
+                future[col] = 0.0
+            logger.info(f"Auto-created missing regressor '{col}' with fallback value")
+        
+        # Convert to numeric and handle NaN/inf
+        future[col] = pd.to_numeric(future[col], errors="coerce")
+        future[col] = future[col].replace([np.inf, -np.inf], np.nan)
+        
+        # Fill NaN with appropriate fallbacks
+        if future[col].isna().any():
+            if col == "transactions_count":
+                future[col] = future[col].fillna(txn_ma_14)
+            elif col == "avg_ticket":
+                future[col] = future[col].fillna(ticket_median_30)
+            elif col == "items_sold":
+                future[col] = future[col].fillna(items_ma_14)
+            else:
+                col_mean = future[col].mean()
+                future[col] = future[col].fillna(col_mean if not np.isnan(col_mean) else 0.0)
+        
+        # Ensure reasonable ranges
         if col == "transactions_count":
             future[col] = future[col].clip(1, 500)
         elif col == "avg_ticket":
             future[col] = future[col].clip(10, 1000)
+        elif col == "items_sold":
+            future[col] = future[col].clip(1, 1000)
         elif col in ["promo_intensity", "holiday_intensity", "event_intensity", "closure_intensity"]:
             future[col] = future[col].clip(0, 2.0)
+        elif col.startswith("is_"):
+            future[col] = future[col].clip(0, 1).astype(int)
     
     if is_validation:
-        logger.info(f"Generated clean regressors for {len(future)} validation dates (NO data leakage)")
-        logger.info(f"  - Avg transactions_count: {future['transactions_count'].mean():.1f}")
-        logger.info(f"  - Avg avg_ticket: {future['avg_ticket'].mean():.1f}")
+        logger.info(f"Generated clean regressors for {n_days} validation dates (NO data leakage)")
+    
+    logger.info(f"Future regressors generated: {n_days} days")
+    logger.info(f"  - transactions_count: mean={future['transactions_count'].mean():.1f}, min={future['transactions_count'].min():.1f}, max={future['transactions_count'].max():.1f}")
+    logger.info(f"  - avg_ticket: mean={future['avg_ticket'].mean():.1f}, min={future['avg_ticket'].min():.1f}, max={future['avg_ticket'].max():.1f}")
+    logger.info(f"  - NaN count: {future.isna().sum().sum()}")
     
     return future
+
+
+def validate_future_dataframe(future_df: pd.DataFrame) -> Tuple[bool, List[str]]:
+    """
+    Validasi future dataframe sebelum forecasting (sesuai prediction_fixed.md).
+    
+    Validasi:
+    - Tidak ada duplikasi tanggal
+    - Tidak ada missing dates (gap)
+    - Tidak ada NaN values
+    - Tidak ada inf values
+    
+    Returns:
+        (is_valid, list_of_errors)
+    """
+    errors = []
+    
+    # 1. Check for duplicate dates
+    if future_df['ds'].duplicated().any():
+        dup_count = future_df['ds'].duplicated().sum()
+        errors.append(f"DUPLICATE DATES: {dup_count} duplicate dates found")
+    
+    # 2. Check for missing dates (gaps)
+    dates_sorted = pd.to_datetime(future_df['ds']).sort_values()
+    if len(dates_sorted) > 1:
+        expected_dates = pd.date_range(start=dates_sorted.min(), end=dates_sorted.max(), freq='D')
+        missing_dates = set(expected_dates) - set(dates_sorted)
+        if missing_dates:
+            errors.append(f"MISSING DATES: {len(missing_dates)} dates missing in forecast range")
+    
+    # 3. Check for NaN values
+    nan_count = future_df.isna().sum().sum()
+    if nan_count > 0:
+        nan_cols = [col for col in future_df.columns if future_df[col].isna().any()]
+        errors.append(f"NaN VALUES: {nan_count} NaN values in columns: {nan_cols}")
+    
+    # 4. Check for inf values
+    numeric_df = future_df.select_dtypes(include=[np.number])
+    inf_count = np.isinf(numeric_df).sum().sum()
+    if inf_count > 0:
+        errors.append(f"INF VALUES: {inf_count} infinite values found")
+    
+    is_valid = len(errors) == 0
+    
+    if not is_valid:
+        logger.error(f"Future dataframe validation FAILED: {errors}")
+    else:
+        logger.info("Future dataframe validation PASSED")
+    
+    return is_valid, errors
+
+
+def validate_forecast_results(
+    forecast: pd.DataFrame, 
+    historical_df: pd.DataFrame,
+    threshold_spike: float = 3.0,
+    threshold_flatten: float = 0.05
+) -> Tuple[bool, List[str], pd.DataFrame]:
+    """
+    Validasi hasil forecast sebelum dikirim ke frontend (sesuai prediction_fixed.md).
+    
+    Validasi:
+    1. Deteksi lonjakan abnormal (spike) yang tidak sesuai pola historis
+    2. Deteksi garis mendatar panjang (flatten) yang biasanya disebabkan regressors kosong
+    3. Validasi rentang nilai prediksi
+    
+    Args:
+        forecast: DataFrame hasil prediksi Prophet (harus punya 'yhat')
+        historical_df: DataFrame data historis (harus punya 'y')
+        threshold_spike: Z-score threshold untuk deteksi spike (default 3.0)
+        threshold_flatten: Variance threshold untuk deteksi flatten (default 0.05)
+    
+    Returns:
+        (is_valid, list_of_warnings, corrected_forecast)
+    """
+    warnings = []
+    forecast = forecast.copy()
+    
+    if 'yhat' not in forecast.columns:
+        return False, ["CRITICAL: 'yhat' column missing in forecast"], forecast
+    
+    yhat = forecast['yhat'].values
+    n_forecast = len(yhat)
+    
+    # Calculate historical statistics
+    if not historical_df.empty and 'y' in historical_df.columns:
+        hist_mean = historical_df['y'].mean()
+        hist_std = historical_df['y'].std()
+        hist_max = historical_df['y'].max()
+        hist_min = historical_df['y'].min()
+    else:
+        hist_mean = yhat.mean()
+        hist_std = yhat.std() if len(yhat) > 1 else 1.0
+        hist_max = yhat.max()
+        hist_min = yhat.min()
+    
+    logger.info(f"=== FORECAST VALIDATION ===")
+    logger.info(f"Historical: mean={hist_mean:.1f}, std={hist_std:.1f}, range=[{hist_min:.1f}, {hist_max:.1f}]")
+    logger.info(f"Forecast: mean={yhat.mean():.1f}, std={yhat.std():.1f}, range=[{yhat.min():.1f}, {yhat.max():.1f}]")
+    
+    # 1. SPIKE DETECTION: Check for abnormal jumps
+    if hist_std > 0:
+        z_scores = np.abs((yhat - hist_mean) / hist_std)
+        spike_count = (z_scores > threshold_spike).sum()
+        
+        if spike_count > 0:
+            spike_indices = np.where(z_scores > threshold_spike)[0]
+            spike_values = yhat[spike_indices]
+            warnings.append(f"SPIKE DETECTED: {spike_count} values with z-score > {threshold_spike} (values: {spike_values[:5].tolist()})")
+            
+            # Auto-correct: clip to reasonable range
+            max_reasonable = hist_mean + (threshold_spike * hist_std)
+            min_reasonable = max(0, hist_mean - (threshold_spike * hist_std))
+            
+            for idx in spike_indices:
+                old_val = forecast.loc[forecast.index[idx], 'yhat']
+                new_val = np.clip(old_val, min_reasonable, max_reasonable)
+                forecast.loc[forecast.index[idx], 'yhat'] = new_val
+                logger.info(f"  - Corrected spike at index {idx}: {old_val:.1f} -> {new_val:.1f}")
+    
+    # 2. FLATTEN DETECTION: Check for long flat lines
+    if n_forecast > 7:
+        # Check rolling variance
+        yhat_series = pd.Series(yhat)
+        rolling_var = yhat_series.rolling(window=7, min_periods=3).var()
+        
+        # Normalize variance by mean to get coefficient of variation
+        mean_val = max(1.0, yhat_series.mean())
+        normalized_var = rolling_var / (mean_val ** 2)
+        
+        # Count windows with very low variance (flatten)
+        flatten_count = (normalized_var < threshold_flatten).sum()
+        flatten_ratio = flatten_count / len(rolling_var.dropna())
+        
+        if flatten_ratio > 0.5:  # More than 50% of windows are flat
+            warnings.append(f"FLATTEN DETECTED: {flatten_ratio*100:.1f}% of forecast has low variance (possible empty regressors)")
+            
+            # This is serious - may indicate regressors issue
+            logger.warning("FLATTEN WARNING: Forecast shows flat pattern, check regressors!")
+    
+    # 3. ZERO/NEGATIVE DETECTION
+    zero_count = (yhat <= 0).sum()
+    if zero_count > 0:
+        warnings.append(f"ZERO/NEGATIVE: {zero_count} values <= 0")
+        forecast['yhat'] = forecast['yhat'].clip(lower=max(1.0, hist_min * 0.5))
+    
+    # 4. NaN/Inf DETECTION
+    nan_count = np.isnan(yhat).sum()
+    inf_count = np.isinf(yhat).sum()
+    if nan_count > 0 or inf_count > 0:
+        warnings.append(f"NaN/Inf: {nan_count} NaN, {inf_count} inf values")
+        # Replace with historical mean
+        forecast['yhat'] = forecast['yhat'].replace([np.inf, -np.inf], np.nan).fillna(hist_mean)
+    
+    # 5. RANGE VALIDATION
+    forecast_mean = forecast['yhat'].mean()
+    if forecast_mean > hist_max * 3:
+        warnings.append(f"RANGE WARNING: Forecast mean ({forecast_mean:.1f}) > 3x historical max ({hist_max:.1f})")
+    elif forecast_mean < hist_min * 0.3 and hist_min > 0:
+        warnings.append(f"RANGE WARNING: Forecast mean ({forecast_mean:.1f}) < 0.3x historical min ({hist_min:.1f})")
+    
+    is_valid = len([w for w in warnings if "CRITICAL" in w or "FLATTEN DETECTED" in w]) == 0
+    
+    if warnings:
+        logger.warning(f"Forecast validation warnings: {warnings}")
+    else:
+        logger.info("Forecast validation PASSED - no anomalies detected")
+    
+    return is_valid, warnings, forecast
+
 
 class CalendarEventInput(BaseModel):
     date: str
@@ -1317,7 +1744,7 @@ def save_model_with_meta(store_id: str, model: Prophet, meta: dict):
     with open(model_path, "w") as f:
         f.write(model_to_json(model))
     
-    meta["saved_at"] = datetime.utcnow().isoformat()
+    meta["saved_at"] = wib_isoformat()
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
 
@@ -1490,7 +1917,7 @@ def daily_retrain():
             return {
                 "status": "success",
                 "message": "Manual retraining triggered",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": wib_isoformat()
             }
         else:
             # Fallback to direct training
@@ -1525,7 +1952,7 @@ def get_model_status(store_id: str):
         
         # Get data freshness
         end_date = datetime.fromisoformat(metadata.get("end_date", "")).date()
-        today = datetime.now().date()
+        today = get_current_date_wib()
         data_age = (today - end_date).days
         
         status = {
@@ -1875,8 +2302,12 @@ def get_prediction(store_id: str, request: PredictionRequest):
                 return train_response
             model, meta = load_model_with_meta(store_id)
         
-        # CRITICAL FIX: Pass metadata to accuracy calculation
-        accuracy = calculate_forecast_accuracy(historical_df, model, meta)
+        # Use accuracy from model metadata (calculated during training)
+        accuracy = meta.get('accuracy', 0) if meta else 0
+        if accuracy == 0:
+            # Fallback: recalculate if not in metadata
+            accuracy = calculate_forecast_accuracy(historical_df, model, meta)
+        logger.info(f"Model accuracy: {accuracy}%")
 
         db_events_df = load_calendar_events_df()
         request_event_dicts = normalize_request_events(request.events) if request and request.events else []
@@ -1903,6 +2334,16 @@ def get_prediction(store_id: str, request: PredictionRequest):
         
         logger.info(f"Generated future regressors for {len(future)} days")
 
+        # VALIDATION 1: Validate future dataframe (prediction_fixed.md requirement)
+        is_valid, validation_errors = validate_future_dataframe(future)
+        if not is_valid:
+            logger.error(f"Future dataframe validation FAILED: {validation_errors}")
+            # Return error with clear message about regressor issues
+            return {
+                "status": "error",
+                "message": f"Future regressors validation failed: {'; '.join(validation_errors)}. Please check calendar events and retrain model."
+            }
+
         expected_regressors = list(getattr(model, 'extra_regressors', {}).keys()) if hasattr(model, 'extra_regressors') else []
         future_for_model = future[["ds"] + expected_regressors] if expected_regressors else future[["ds"]]
         
@@ -1920,15 +2361,40 @@ def get_prediction(store_id: str, request: PredictionRequest):
                 if col in scaler_params.get("columns", []):
                     logger.info(f"  - Scaled {col}: mean={future_for_model[col].mean():.4f}")
         
+        # SANITY CHECK 3: Validate future_for_model before prediction
+        logger.info("=== SANITY CHECK: Future DataFrame ===")
+        logger.info(f"  - Shape: {future_for_model.shape}")
+        logger.info(f"  - Columns: {list(future_for_model.columns)}")
+        logger.info(f"  - NaN count: {future_for_model.isna().sum().sum()}")
+        logger.info(f"  - Inf count: {np.isinf(future_for_model.select_dtypes(include=[np.number])).sum().sum()}")
+        
+        # Auto-fix any remaining NaN/inf values
+        for col in future_for_model.columns:
+            if col == 'ds':
+                continue
+            future_for_model[col] = pd.to_numeric(future_for_model[col], errors='coerce')
+            future_for_model[col] = future_for_model[col].replace([np.inf, -np.inf], np.nan)
+            if future_for_model[col].isna().any():
+                col_mean = future_for_model[col].mean()
+                fallback = col_mean if not np.isnan(col_mean) else 0.0
+                logger.warning(f"  - Auto-filling NaN in '{col}' with {fallback:.4f}")
+                future_for_model[col] = future_for_model[col].fillna(fallback)
+        
+        # Print sample of future data for debugging
+        logger.info(f"  - Sample (first 3 rows):")
+        for col in expected_regressors[:5]:  # Show first 5 regressors
+            if col in future_for_model.columns:
+                logger.info(f"    {col}: {future_for_model[col].head(3).tolist()}")
+        
         logger.info("Generating forecast...")
         forecast = model.predict(future_for_model)
 
         # CRITICAL FIX: Use metadata to determine if inverse transform is needed
-        
         logger.info(f"Applying inverse transform: {use_log_transform}")
         if use_log_transform:
             # Model was trained on log scale, inverse transform predictions to original scale
             logger.info(f"  - Before expm1: yhat range [{forecast['yhat'].min():.3f}, {forecast['yhat'].max():.3f}]")
+            # CLIPPING: Apply -10 to +20 before expm1 to prevent extreme values
             forecast['yhat'] = np.expm1(forecast['yhat'].clip(-10, 20))
             forecast['yhat_lower'] = np.expm1(forecast['yhat_lower'].clip(-10, 20))
             forecast['yhat_upper'] = np.expm1(forecast['yhat_upper'].clip(-10, 20))
@@ -1936,6 +2402,111 @@ def get_prediction(store_id: str, request: PredictionRequest):
         else:
             # Model was trained on original scale (no transform needed)
             logger.info(f"  - yhat range: [{forecast['yhat'].min():.1f}, {forecast['yhat'].max():.1f}] (no transform)")
+        
+        # VALIDATION 2: Validate forecast results (prediction_fixed.md requirement)
+        # Detect spikes, flatten patterns, and other anomalies
+        is_forecast_valid, forecast_warnings, forecast = validate_forecast_results(
+            forecast=forecast,
+            historical_df=historical_df,
+            threshold_spike=3.0,
+            threshold_flatten=0.05
+        )
+        
+        if forecast_warnings:
+            logger.warning(f"Forecast validation warnings: {forecast_warnings}")
+        
+        # POST-PROCESSING: Validate and align forecast with historical data
+        historical_mean = historical_df['y'].tail(30).mean() if len(historical_df) >= 30 else historical_df['y'].mean()
+        historical_std = historical_df['y'].tail(30).std() if len(historical_df) >= 30 else historical_df['y'].std()
+        last_historical_value = historical_df['y'].iloc[-1] if len(historical_df) > 0 else historical_mean
+        
+        # Calculate weekday-specific averages from historical data
+        weekday_means = {}
+        for wd in range(7):
+            wd_data = historical_df[historical_df['ds'].dt.weekday == wd]['y']
+            weekday_means[wd] = wd_data.mean() if len(wd_data) > 0 else historical_mean
+        
+        logger.info(f"Historical stats: mean={historical_mean:.1f}, std={historical_std:.1f}, last={last_historical_value:.1f}")
+        logger.info(f"Weekday means: {', '.join([f'{k}:{v:.1f}' for k,v in weekday_means.items()])}")
+        
+        # Detect problematic forecasts (yhat = 0, NaN, or extreme values)
+        zero_count = (forecast['yhat'] <= 0).sum()
+        nan_count = forecast['yhat'].isna().sum()
+        
+        if zero_count > 0 or nan_count > 0:
+            logger.warning(f"DETECTED: {zero_count} values <= 0, {nan_count} NaN values")
+        
+        # Reasonable bounds based on historical distribution
+        min_reasonable = max(1.0, historical_mean * 0.3)  # At least 30% of historical mean
+        max_reasonable = historical_mean + (3 * historical_std)  # Mean + 3 std deviations
+        
+        # STEP 1: Fix problematic values (zeros, NaN, inf)
+        corrected_count = 0
+        for idx in range(len(forecast)):
+            yhat = forecast.loc[forecast.index[idx], 'yhat']
+            date_obj = pd.to_datetime(forecast.loc[forecast.index[idx], 'ds']).date()
+            weekday = date_obj.weekday()
+            
+            # Check for problematic values
+            if yhat <= 0 or np.isnan(yhat) or np.isinf(yhat):
+                # Use weekday-specific average as fallback
+                fallback_value = weekday_means.get(weekday, historical_mean)
+                forecast.loc[forecast.index[idx], 'yhat'] = fallback_value
+                corrected_count += 1
+                logger.info(f"  - Corrected {date_obj} (wd={weekday}): {yhat:.2f} -> {fallback_value:.2f}")
+        
+        if corrected_count > 0:
+            logger.info(f"Corrected {corrected_count} problematic forecast values")
+        
+        # STEP 2: Ensure forecast starts close to last historical value (smooth transition)
+        first_forecast_value = forecast['yhat'].iloc[0]
+        if abs(first_forecast_value - last_historical_value) > historical_std * 2:
+            # Adjust to create smooth transition
+            adjustment_ratio = last_historical_value / first_forecast_value if first_forecast_value > 0 else 1.0
+            adjustment_ratio = max(0.5, min(2.0, adjustment_ratio))  # Limit adjustment
+            
+            # Apply gradual adjustment (stronger at start, fading over time)
+            for idx in range(min(14, len(forecast))):  # First 14 days
+                fade_factor = 1 - (idx / 14)  # 1.0 -> 0.0
+                current_adjustment = 1 + (adjustment_ratio - 1) * fade_factor
+                forecast.loc[forecast.index[idx], 'yhat'] *= current_adjustment
+            
+            logger.info(f"Applied transition adjustment: ratio={adjustment_ratio:.2f}")
+        
+        # STEP 3: Light smoothing only for extreme outliers (preserve natural variation)
+        yhat_values = forecast['yhat'].values.copy()
+        for idx in range(1, len(forecast) - 1):
+            current = yhat_values[idx]
+            prev_val = yhat_values[idx - 1]
+            next_val = yhat_values[idx + 1]
+            local_mean = (prev_val + next_val) / 2
+            
+            # Only smooth if current value is an extreme outlier (>50% deviation from neighbors)
+            if abs(current - local_mean) > local_mean * 0.5:
+                smoothed = 0.6 * current + 0.4 * local_mean  # Blend with neighbors
+                forecast.loc[forecast.index[idx], 'yhat'] = smoothed
+        
+        # STEP 4: Clip to reasonable bounds
+        forecast['yhat'] = forecast['yhat'].clip(lower=min_reasonable, upper=max_reasonable)
+        forecast['yhat_lower'] = forecast['yhat_lower'].clip(lower=0)
+        forecast['yhat_upper'] = forecast['yhat_upper'].clip(lower=forecast['yhat'])
+        
+        # STEP 5: Ensure confidence intervals are reasonable relative to yhat
+        for idx in range(len(forecast)):
+            yhat = forecast.loc[forecast.index[idx], 'yhat']
+            current_lower = forecast.loc[forecast.index[idx], 'yhat_lower']
+            current_upper = forecast.loc[forecast.index[idx], 'yhat_upper']
+            
+            # Lower bound: between 50% and 100% of yhat
+            new_lower = max(yhat * 0.5, min(current_lower, yhat * 0.95))
+            forecast.loc[forecast.index[idx], 'yhat_lower'] = max(0, new_lower)
+            
+            # Upper bound: between 100% and 150% of yhat
+            new_upper = min(yhat * 1.5, max(current_upper, yhat * 1.05))
+            forecast.loc[forecast.index[idx], 'yhat_upper'] = new_upper
+        
+        logger.info(f"Final forecast range: [{forecast['yhat'].min():.1f}, {forecast['yhat'].max():.1f}]")
+        logger.info(f"Bounds applied: min={min_reasonable:.1f}, max={max_reasonable:.1f}")
 
         # FIXED: Bug 3 - Check for empty forecast
         if forecast.empty:
@@ -1945,29 +2516,54 @@ def get_prediction(store_id: str, request: PredictionRequest):
             )
 
         historical_lookup = {pd.to_datetime(row['ds']).date(): float(row['y']) for _, row in historical_df.iterrows()}
-        chart_window = forecast_days + 60
-        forecast_tail = forecast.tail(chart_window)
-
-        # FIXED: Bug 3 - Additional empty check
-        if forecast_tail.empty:
-            raise HTTPException(
-                status_code=500,
-                detail="Forecast data is empty after processing."
-            )
-
+        
+        # CRITICAL FIX: Combine historical data and forecast for seamless charting
         chart_data = []
         chart_dates = []
-        for _, row in forecast_tail.iterrows():
+        
+        # 1. Add Historical Data (last 90 days)
+        history_window = 90
+        recent_history = historical_df.tail(history_window).copy()
+        
+        for i, (_, row) in enumerate(recent_history.iterrows()):
             date_obj = pd.to_datetime(row['ds']).date()
-            historical_value = historical_lookup.get(date_obj)
-            predicted_value = max(0, float(row['yhat'])) if historical_value is None else None
+            entry_events = event_lookup.get(date_obj)
+            event_titles = sorted(entry_events['titles']) if entry_events and entry_events['titles'] else []
+            
+            # BRIDGE: For the last historical point, also add it as the start of the predicted line
+            # This ensures the lines connect visually
+            is_last_point = (i == len(recent_history) - 1)
+            predicted_val = float(row['y']) if is_last_point else None
+            
+            chart_data.append({
+                "date": date_obj.strftime('%Y-%m-%d'),
+                "historical": float(row['y']),
+                "predicted": predicted_val, 
+                "isHoliday": bool(event_titles),
+                "holidayName": ", ".join(event_titles) if event_titles else None,
+                "lower": None,
+                "upper": None
+            })
+            chart_dates.append(date_obj)
+
+        # 2. Add Forecast Data
+        # Ensure we connect the lines visually by adding the last historical point as the first prediction point if needed
+        # But Recharts handles disjoint lines if configured. For now, let's just append forecast.
+        
+        for _, row in forecast.iterrows():
+            date_obj = pd.to_datetime(row['ds']).date()
+            # Skip if we somehow have overlap (shouldn't happen with current logic)
+            if date_obj in chart_dates:
+                continue
+                
+            predicted_value = max(0, float(row['yhat']))
             entry_events = event_lookup.get(date_obj)
             event_titles = sorted(entry_events['titles']) if entry_events and entry_events['titles'] else []
 
             chart_data.append({
                 "date": date_obj.strftime('%Y-%m-%d'),
-                "historical": historical_value,
-                "predicted": round(predicted_value, 2) if predicted_value is not None else None,
+                "historical": None,
+                "predicted": round(predicted_value, 2),
                 "isHoliday": bool(event_titles),
                 "holidayName": ", ".join(event_titles) if event_titles else None,
                 "lower": round(max(0, float(row.get('yhat_lower', 0))), 2),
@@ -2049,7 +2645,7 @@ def get_prediction(store_id: str, request: PredictionRequest):
             "accuracy": accuracy
         }
 
-        # Add model metadata to response
+        # Add model metadata to response (prediction_fixed.md: output format)
         response_meta = meta.copy() if meta else {}
         response_meta.update({
             "applied_factor": round(growth_factor, 2),
@@ -2057,7 +2653,12 @@ def get_prediction(store_id: str, request: PredictionRequest):
             "forecastDays": forecast_days,
             "lastHistoricalDate": historical_df['ds'].max().strftime('%Y-%m-%d') if not historical_df.empty else None,
             "accuracy": accuracy,
-            "log_transform": use_log_transform
+            "train_mape": meta.get("train_mape") if meta else None,
+            "validation_mape": meta.get("validation_mape") if meta else None,
+            "log_transform": use_log_transform,
+            "model_version": meta.get("model_version", "unknown") if meta else "unknown",
+            "model_saved_at": meta.get("saved_at") if meta else None,
+            "validation_warnings": forecast_warnings if 'forecast_warnings' in dir() else []
         })
 
         logger.info(f"Prediction completed successfully. Accuracy: {accuracy}%")

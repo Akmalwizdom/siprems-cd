@@ -49,6 +49,12 @@ export interface PredictionResponse {
     lastHistoricalDate?: string;
     regressors?: string[];
     accuracy?: number;
+    train_mape?: number | null;
+    validation_mape?: number | null;
+    log_transform?: boolean;
+    model_version?: string;
+    model_saved_at?: string | null;
+    validation_warnings?: string[];
   };
 }
 

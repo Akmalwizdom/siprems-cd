@@ -25,49 +25,50 @@ if not DATABASE_URL:
 
 engine = create_engine(DATABASE_URL)
 
-# Product catalog (30 items)
+# Currency: IDR (Indonesian Rupiah)
+# All prices are in IDR (converted from USD with rate 1 USD = 16,616 IDR, rounded to realistic Indonesian pricing)
 PRODUCT_CATALOG = [
-    # Coffee (10)
-    {"sku": "CF-001", "name": "Heritage Espresso", "category": "Coffee", "cost_price": 1.20, "selling_price": 3.20, "stock": 220, "is_seasonal": False, "description": "Double-shot espresso with caramelized finish."},
-    {"sku": "CF-002", "name": "Midnight Americano", "category": "Coffee", "cost_price": 1.10, "selling_price": 3.50, "stock": 210, "is_seasonal": False, "description": "Bold americano served hot or iced."},
-    {"sku": "CF-003", "name": "Caramel Cloud Latte", "category": "Coffee", "cost_price": 1.60, "selling_price": 4.80, "stock": 200, "is_seasonal": False, "description": "Steamed milk microfoam with burnt caramel."},
-    {"sku": "CF-004", "name": "Velvet Vanilla Latte", "category": "Coffee", "cost_price": 1.55, "selling_price": 4.60, "stock": 180, "is_seasonal": False, "description": "Madagascar vanilla bean latte."},
-    {"sku": "CF-005", "name": "Mocha Truffle", "category": "Coffee", "cost_price": 1.75, "selling_price": 5.10, "stock": 170, "is_seasonal": False, "description": "Dark chocolate mocha with cocoa nibs."},
-    {"sku": "CF-006", "name": "Flat White Reserve", "category": "Coffee", "cost_price": 1.40, "selling_price": 4.20, "stock": 190, "is_seasonal": False, "description": "Silky ristretto blend."},
-    {"sku": "CF-007", "name": "Hazelnut Cappuccino", "category": "Coffee", "cost_price": 1.50, "selling_price": 4.50, "stock": 185, "is_seasonal": False, "description": "Foamy cappuccino with roasted hazelnut."},
-    {"sku": "CF-008", "name": "Nitro Cold Brew", "category": "Coffee", "cost_price": 1.95, "selling_price": 5.60, "stock": 150, "is_seasonal": False, "description": "Slow-steeped cold brew on nitro tap."},
-    {"sku": "CF-009", "name": "Coconut Latte", "category": "Coffee", "cost_price": 1.70, "selling_price": 4.90, "stock": 160, "is_seasonal": False, "description": "Creamy coconut milk latte."},
-    {"sku": "CF-010", "name": "Espresso Tonic", "category": "Coffee", "cost_price": 1.45, "selling_price": 4.30, "stock": 155, "is_seasonal": False, "description": "Citrus tonic layered with espresso."},
+    # Coffee (10) - Harga kopi Indonesia: Rp 20.000 - Rp 95.000
+    {"sku": "CF-001", "name": "Heritage Espresso", "category": "Coffee", "cost_price": 20000, "selling_price": 53000, "stock": 220, "is_seasonal": False, "description": "Double-shot espresso with caramelized finish."},
+    {"sku": "CF-002", "name": "Midnight Americano", "category": "Coffee", "cost_price": 18000, "selling_price": 58000, "stock": 210, "is_seasonal": False, "description": "Bold americano served hot or iced."},
+    {"sku": "CF-003", "name": "Caramel Cloud Latte", "category": "Coffee", "cost_price": 27000, "selling_price": 80000, "stock": 200, "is_seasonal": False, "description": "Steamed milk microfoam with burnt caramel."},
+    {"sku": "CF-004", "name": "Velvet Vanilla Latte", "category": "Coffee", "cost_price": 26000, "selling_price": 76000, "stock": 180, "is_seasonal": False, "description": "Madagascar vanilla bean latte."},
+    {"sku": "CF-005", "name": "Mocha Truffle", "category": "Coffee", "cost_price": 29000, "selling_price": 85000, "stock": 170, "is_seasonal": False, "description": "Dark chocolate mocha with cocoa nibs."},
+    {"sku": "CF-006", "name": "Flat White Reserve", "category": "Coffee", "cost_price": 23000, "selling_price": 70000, "stock": 190, "is_seasonal": False, "description": "Silky ristretto blend."},
+    {"sku": "CF-007", "name": "Hazelnut Cappuccino", "category": "Coffee", "cost_price": 25000, "selling_price": 75000, "stock": 185, "is_seasonal": False, "description": "Foamy cappuccino with roasted hazelnut."},
+    {"sku": "CF-008", "name": "Nitro Cold Brew", "category": "Coffee", "cost_price": 32000, "selling_price": 93000, "stock": 150, "is_seasonal": False, "description": "Slow-steeped cold brew on nitro tap."},
+    {"sku": "CF-009", "name": "Coconut Latte", "category": "Coffee", "cost_price": 28000, "selling_price": 81000, "stock": 160, "is_seasonal": False, "description": "Creamy coconut milk latte."},
+    {"sku": "CF-010", "name": "Espresso Tonic", "category": "Coffee", "cost_price": 24000, "selling_price": 71000, "stock": 155, "is_seasonal": False, "description": "Citrus tonic layered with espresso."},
 
-    # Tea (5)
-    {"sku": "TE-011", "name": "Jasmine Green Tea", "category": "Tea", "cost_price": 0.90, "selling_price": 3.50, "stock": 140, "is_seasonal": False, "description": "Hand-steeped jasmine pearls."},
-    {"sku": "TE-012", "name": "Earl Grey Creme", "category": "Tea", "cost_price": 1.00, "selling_price": 3.80, "stock": 135, "is_seasonal": False, "description": "Bergamot black tea with vanilla foam."},
-    {"sku": "TE-013", "name": "Masala Chai Latte", "category": "Tea", "cost_price": 1.10, "selling_price": 4.00, "stock": 150, "is_seasonal": False, "description": "Spiced chai with oat milk."},
-    {"sku": "TE-014", "name": "Hibiscus Citrus Cooler", "category": "Tea", "cost_price": 0.95, "selling_price": 3.90, "stock": 130, "is_seasonal": False, "description": "Iced hibiscus tea with yuzu."},
-    {"sku": "TE-015", "name": "Ceremonial Matcha", "category": "Tea", "cost_price": 1.80, "selling_price": 5.40, "stock": 125, "is_seasonal": False, "description": "Stone-ground matcha whisked to order."},
+    # Tea (5) - Harga teh: Rp 15.000 - Rp 90.000
+    {"sku": "TE-011", "name": "Jasmine Green Tea", "category": "Tea", "cost_price": 15000, "selling_price": 58000, "stock": 140, "is_seasonal": False, "description": "Hand-steeped jasmine pearls."},
+    {"sku": "TE-012", "name": "Earl Grey Creme", "category": "Tea", "cost_price": 17000, "selling_price": 63000, "stock": 135, "is_seasonal": False, "description": "Bergamot black tea with vanilla foam."},
+    {"sku": "TE-013", "name": "Masala Chai Latte", "category": "Tea", "cost_price": 18000, "selling_price": 66000, "stock": 150, "is_seasonal": False, "description": "Spiced chai with oat milk."},
+    {"sku": "TE-014", "name": "Hibiscus Citrus Cooler", "category": "Tea", "cost_price": 16000, "selling_price": 65000, "stock": 130, "is_seasonal": False, "description": "Iced hibiscus tea with yuzu."},
+    {"sku": "TE-015", "name": "Ceremonial Matcha", "category": "Tea", "cost_price": 30000, "selling_price": 90000, "stock": 125, "is_seasonal": False, "description": "Stone-ground matcha whisked to order."},
 
-    # Non-coffee beverages (5)
-    {"sku": "NC-016", "name": "Dark Chocolate Frappe", "category": "Non-Coffee", "cost_price": 1.90, "selling_price": 5.80, "stock": 145, "is_seasonal": False, "description": "Rich chocolate frappe with cream."},
-    {"sku": "NC-017", "name": "Salted Caramel Frappe", "category": "Non-Coffee", "cost_price": 1.85, "selling_price": 5.70, "stock": 150, "is_seasonal": False, "description": "Butterscotch caramel shake."},
-    {"sku": "NC-018", "name": "Tropical Sunrise Smoothie", "category": "Non-Coffee", "cost_price": 1.60, "selling_price": 5.10, "stock": 140, "is_seasonal": False, "description": "Mango-pineapple smoothie."},
-    {"sku": "NC-019", "name": "Sparkling Yuzu Ade", "category": "Non-Coffee", "cost_price": 1.30, "selling_price": 4.60, "stock": 135, "is_seasonal": False, "description": "Sparkling citrus cooler."},
-    {"sku": "NC-020", "name": "Charcoal Lemonade", "category": "Non-Coffee", "cost_price": 1.20, "selling_price": 4.30, "stock": 120, "is_seasonal": False, "description": "Activated charcoal detox."},
+    # Non-coffee beverages (5) - Harga non-kopi: Rp 20.000 - Rp 96.000
+    {"sku": "NC-016", "name": "Dark Chocolate Frappe", "category": "Non-Coffee", "cost_price": 32000, "selling_price": 96000, "stock": 145, "is_seasonal": False, "description": "Rich chocolate frappe with cream."},
+    {"sku": "NC-017", "name": "Salted Caramel Frappe", "category": "Non-Coffee", "cost_price": 31000, "selling_price": 95000, "stock": 150, "is_seasonal": False, "description": "Butterscotch caramel shake."},
+    {"sku": "NC-018", "name": "Tropical Sunrise Smoothie", "category": "Non-Coffee", "cost_price": 27000, "selling_price": 85000, "stock": 140, "is_seasonal": False, "description": "Mango-pineapple smoothie."},
+    {"sku": "NC-019", "name": "Sparkling Yuzu Ade", "category": "Non-Coffee", "cost_price": 22000, "selling_price": 76000, "stock": 135, "is_seasonal": False, "description": "Sparkling citrus cooler."},
+    {"sku": "NC-020", "name": "Charcoal Lemonade", "category": "Non-Coffee", "cost_price": 20000, "selling_price": 71000, "stock": 120, "is_seasonal": False, "description": "Activated charcoal detox."},
 
-    # Pastry (5)
-    {"sku": "PS-021", "name": "Butter Croissant", "category": "Pastry", "cost_price": 0.90, "selling_price": 2.80, "stock": 110, "is_seasonal": False, "description": "Layered French butter croissant."},
-    {"sku": "PS-022", "name": "Almond Twice-Baked", "category": "Pastry", "cost_price": 1.10, "selling_price": 3.60, "stock": 105, "is_seasonal": False, "description": "Almond cream croissant."},
-    {"sku": "PS-023", "name": "Cardamom Cinnamon Roll", "category": "Pastry", "cost_price": 1.30, "selling_price": 4.20, "stock": 100, "is_seasonal": False, "description": "Yeasted roll with citrus glaze."},
-    {"sku": "PS-024", "name": "Dark Chocolate Lava Cake", "category": "Pastry", "cost_price": 1.90, "selling_price": 5.90, "stock": 95, "is_seasonal": False, "description": "Molten center mini cake."},
-    {"sku": "PS-025", "name": "Roasted Fruit Tart", "category": "Pastry", "cost_price": 1.50, "selling_price": 4.80, "stock": 98, "is_seasonal": False, "description": "Seasonal fruit tart."},
+    # Pastry (5) - Harga pastry: Rp 15.000 - Rp 98.000
+    {"sku": "PS-021", "name": "Butter Croissant", "category": "Pastry", "cost_price": 15000, "selling_price": 47000, "stock": 110, "is_seasonal": False, "description": "Layered French butter croissant."},
+    {"sku": "PS-022", "name": "Almond Twice-Baked", "category": "Pastry", "cost_price": 18000, "selling_price": 60000, "stock": 105, "is_seasonal": False, "description": "Almond cream croissant."},
+    {"sku": "PS-023", "name": "Cardamom Cinnamon Roll", "category": "Pastry", "cost_price": 22000, "selling_price": 70000, "stock": 100, "is_seasonal": False, "description": "Yeasted roll with citrus glaze."},
+    {"sku": "PS-024", "name": "Dark Chocolate Lava Cake", "category": "Pastry", "cost_price": 32000, "selling_price": 98000, "stock": 95, "is_seasonal": False, "description": "Molten center mini cake."},
+    {"sku": "PS-025", "name": "Roasted Fruit Tart", "category": "Pastry", "cost_price": 25000, "selling_price": 80000, "stock": 98, "is_seasonal": False, "description": "Seasonal fruit tart."},
 
-    # Light meals (3)
-    {"sku": "LM-026", "name": "Truffle Mushroom Toast", "category": "Light Meals", "cost_price": 2.60, "selling_price": 7.80, "stock": 85, "is_seasonal": False, "description": "Sourdough with truffle mushrooms."},
-    {"sku": "LM-027", "name": "Smoked Chicken Sandwich", "category": "Light Meals", "cost_price": 2.90, "selling_price": 8.20, "stock": 90, "is_seasonal": False, "description": "Smoked chicken with herb aioli."},
-    {"sku": "LM-028", "name": "Roasted Veggie Panini", "category": "Light Meals", "cost_price": 2.70, "selling_price": 7.90, "stock": 88, "is_seasonal": False, "description": "Mediterranean veggie panini."},
+    # Light meals (3) - Harga makanan ringan: Rp 43.000 - Rp 136.000
+    {"sku": "LM-026", "name": "Truffle Mushroom Toast", "category": "Light Meals", "cost_price": 43000, "selling_price": 130000, "stock": 85, "is_seasonal": False, "description": "Sourdough with truffle mushrooms."},
+    {"sku": "LM-027", "name": "Smoked Chicken Sandwich", "category": "Light Meals", "cost_price": 48000, "selling_price": 136000, "stock": 90, "is_seasonal": False, "description": "Smoked chicken with herb aioli."},
+    {"sku": "LM-028", "name": "Roasted Veggie Panini", "category": "Light Meals", "cost_price": 45000, "selling_price": 131000, "stock": 88, "is_seasonal": False, "description": "Mediterranean veggie panini."},
 
-    # Seasonal menu (2)
-    {"sku": "SN-029", "name": "Pandan Coconut Latte", "category": "Seasonal", "cost_price": 1.80, "selling_price": 5.40, "stock": 130, "is_seasonal": True, "description": "Limited pandan latte."},
-    {"sku": "SN-030", "name": "Strawberry Cheesecake Frappe", "category": "Seasonal", "cost_price": 1.95, "selling_price": 5.90, "stock": 125, "is_seasonal": True, "description": "Summer berry frappe."}
+    # Seasonal menu (2) - Harga musiman: Rp 30.000 - Rp 98.000
+    {"sku": "SN-029", "name": "Pandan Coconut Latte", "category": "Seasonal", "cost_price": 30000, "selling_price": 90000, "stock": 130, "is_seasonal": True, "description": "Limited pandan latte."},
+    {"sku": "SN-030", "name": "Strawberry Cheesecake Frappe", "category": "Seasonal", "cost_price": 32000, "selling_price": 98000, "stock": 125, "is_seasonal": True, "description": "Summer berry frappe."}
 ]
 
 # FIXED: Bug 5 - Function generates events without global state
@@ -101,7 +102,7 @@ def generate_calendar_events(start_date, num_days):
     return events
 
 PAYMENT_METHODS = ["Cash", "QRIS", "Debit Card", "Credit Card", "E-Wallet"]
-CUSTOMER_SEGMENTS = ["dine-in", "takeaway", "delivery"]
+ORDER_TYPES = ["dine-in", "takeaway", "delivery"]
 
 HOUR_DISTRIBUTION = {
     7: 1,
@@ -260,7 +261,7 @@ def build_transactions(product_rows, calendar_events):
                 "date": timestamp,
                 "total_amount": total_amount,
                 "payment_method": random.choice(PAYMENT_METHODS),
-                "customer_segment": random.choices(CUSTOMER_SEGMENTS, weights=[0.55, 0.35, 0.10])[0],
+                "order_types": random.choices(ORDER_TYPES, weights=[0.55, 0.35, 0.10])[0],
                 "items_count": items_count
             })
             items_batch.extend(line_items)
@@ -273,8 +274,8 @@ def build_transactions(product_rows, calendar_events):
 def insert_transactions_batched(engine_obj, transactions_batch, items_batch):
     """Insert transactions in smaller committed batches for better performance"""
     tx_sql = text("""
-        INSERT INTO transactions (id, date, total_amount, payment_method, customer_segment, items_count)
-        VALUES (:id, :date, :total_amount, :payment_method, :customer_segment, :items_count)
+        INSERT INTO transactions (id, date, total_amount, payment_method, order_types, items_count)
+        VALUES (:id, :date, :total_amount, :payment_method, :order_types, :items_count)
     """)
     item_sql = text("""
         INSERT INTO transaction_items (transaction_id, product_id, quantity, unit_price, subtotal)

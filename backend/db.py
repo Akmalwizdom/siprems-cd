@@ -1,12 +1,15 @@
 import os
 from typing import Optional
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.pool import NullPool
 import pandas as pd
 
 # Load environment variables from .env file (override system env vars)
 load_dotenv(override=True)
+
+# Set timezone environment variable
+os.environ["TZ"] = "Asia/Jakarta"
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -19,9 +22,17 @@ engine = create_engine(
     pool_pre_ping=True,
     connect_args={
         "connect_timeout": 10,
-        "application_name": "siprems_backend"
+        "application_name": "siprems_backend",
+        "options": "-c timezone=Asia/Jakarta"
     }
 )
+
+@event.listens_for(engine, "connect")
+def set_timezone_on_connect(dbapi_connection, connection_record):
+    """Set timezone to Asia/Jakarta on every new connection."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("SET timezone = 'Asia/Jakarta'")
+    cursor.close()
 
 def get_store_data(store_id: Optional[int] = None):
     """Ambil ringkasan harian untuk kebutuhan model Prophet."""

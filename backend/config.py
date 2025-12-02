@@ -6,11 +6,20 @@ OPTIMIZED for:
 - Stable validation MAPE
 - Better short/medium-term accuracy
 """
+import os
 from datetime import timedelta
+from zoneinfo import ZoneInfo
+
+# ============================================================
+# TIMEZONE CONFIGURATION - Asia/Jakarta (WIB, UTC+7)
+# ============================================================
+TIMEZONE = "Asia/Jakarta"
+WIB = ZoneInfo(TIMEZONE)
+os.environ["TZ"] = TIMEZONE
 
 # Training Configuration
-TRAINING_WINDOW_DAYS = 180
-MIN_TRAINING_DAYS = 60
+TRAINING_WINDOW_DAYS = 365  # Use ALL available data (up to 1 year)
+MIN_TRAINING_DAYS = 30      # Lowered to allow training with less data
 VALIDATION_DAYS = 14
 
 # Data size thresholds for adaptive configuration
@@ -54,16 +63,16 @@ PROPHET_PARAMS_SHORT = {
     "n_changepoints": 10,                 # Limited changepoints
 }
 
-# Medium data (90-180 days): balanced approach
+# Medium data (90-180 days): balanced approach - OPTIMIZED FOR ACCURACY
 PROPHET_PARAMS_MEDIUM = {
     "yearly_seasonality": False,          # Still not enough
-    "weekly_seasonality": 8,              # Moderate complexity
+    "weekly_seasonality": 5,              # Reduced to avoid overfitting
     "daily_seasonality": False,
-    "seasonality_mode": "multiplicative",
-    "seasonality_prior_scale": 8.0,
-    "changepoint_prior_scale": 0.05,      # Moderate flexibility
-    "changepoint_range": 0.8,
-    "n_changepoints": 15,
+    "seasonality_mode": "additive",       # Changed: additive more stable
+    "seasonality_prior_scale": 5.0,       # Tighter regularization
+    "changepoint_prior_scale": 0.02,      # Much lower: reduce volatility
+    "changepoint_range": 0.7,             # Fewer changepoints near end
+    "n_changepoints": 10,                 # Fewer changepoints
 }
 
 # Long data (>180 days): full model
