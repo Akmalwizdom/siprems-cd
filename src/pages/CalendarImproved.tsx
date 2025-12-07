@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useStore, type CalendarEvent } from '../context/StoreContext';
 import { formatIDR } from '../utils/currency';
+import { Button } from '../components/ui/button';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -556,40 +557,42 @@ export function CalendarImproved() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => handleNavigate(-1)}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
           >
             <ChevronLeft className="w-5 h-5 text-slate-600" />
-          </button>
+          </Button>
           <h1 className="text-slate-900">{formatHeader()}</h1>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => handleNavigate(1)}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
           >
             <ChevronRight className="w-5 h-5 text-slate-600" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setCurrentDate(new Date())}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
           >
             Hari Ini
-          </button>
+          </Button>
         </div>
 
         <div className="flex items-center gap-3">
-          <button
+          <Button
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              // Use handleDateClick to ensure clean state
               handleDateClick(new Date());
             }}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+            size="sm"
           >
             <Plus className="w-5 h-5" />
             Tambah Acara
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -628,9 +631,9 @@ export function CalendarImproved() {
           >
             <div className="p-6 border-b border-slate-200 flex items-center justify-between">
               <h2 className="text-slate-900">{isEditMode ? 'Edit Acara' : 'Tambah Acara'}</h2>
-              <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <Button variant="ghost" size="icon-sm" onClick={closeModal}>
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
 
             <div className="p-6 space-y-4">
@@ -702,45 +705,48 @@ export function CalendarImproved() {
                   </div>
                   
                   <div className="flex gap-3">
-                    <button
+                    <Button
                       type="button"
+                      variant="success"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         handleAcceptSuggestion();
                       }}
-                      className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors shadow-md font-medium"
+                      className="flex-1"
                       title="Gunakan saran AI untuk kategori & dampak"
                     >
                       <CheckCircle className="w-5 h-5" />
                       <span className="text-base">Terima</span>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="info"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         handleEditSuggestion();
                       }}
-                      className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors shadow-md font-medium"
+                      className="flex-1"
                       title="Ubah acara sebelum menyimpan"
                     >
                       <Edit3 className="w-5 h-5" />
                       <span className="text-base">Edit</span>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="destructive"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         handleRejectSuggestion(e);
                       }}
-                      className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-colors shadow-md font-medium"
+                      className="flex-1"
                       title="Batalkan tanpa menyimpan"
                     >
                       <XCircle className="w-5 h-5" />
                       <span className="text-base">Tolak</span>
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -787,28 +793,28 @@ export function CalendarImproved() {
 
               {!aiSuggestion && !isLoadingAI && (
                 <div className="flex gap-3 pt-4">
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={closeModal}
-                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                    className="flex-1"
                   >
                     Batal
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
                     onClick={() => {
-                      // User chose to continue without AI suggestion or after editing
                       if (!formData.title) {
                         alert('Silakan masukkan judul acara');
                         return;
                       }
                       setShowConfirmModal(true);
                     }}
-                    className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!formData.title}
+                    className="flex-1"
                   >
                     Lanjutkan
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -836,18 +842,16 @@ export function CalendarImproved() {
               </div>
 
               <div className="flex gap-3">
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => setShowConfirmModal(false)}
-                  className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="flex-1"
                 >
                   Kembali
-                </button>
-                <button
-                  onClick={handleConfirmEvent}
-                  className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                >
+                </Button>
+                <Button onClick={handleConfirmEvent} className="flex-1">
                   Konfirmasi & Simpan
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -863,9 +867,9 @@ export function CalendarImproved() {
                 <h2 className="text-slate-900">Event Intelligence</h2>
                 <p className="text-sm text-slate-500">{selectedEvent.title}</p>
               </div>
-              <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <Button variant="ghost" size="icon-sm" onClick={closeModal}>
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
 
             <div className="p-6 space-y-6">
@@ -940,20 +944,17 @@ export function CalendarImproved() {
               {/* Actions */}
               <div className="flex gap-3">
                 {new Date(selectedEvent.date) < new Date() && (
-                  <button
+                  <Button
                     onClick={() => handleCalibrateEvent(selectedEvent.id)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
+                    className="flex-1"
                   >
                     <TrendingUp className="w-4 h-4" />
                     Re-calibrate Impact
-                  </button>
+                  </Button>
                 )}
-                <button
-                  onClick={closeModal}
-                  className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
-                >
+                <Button variant="outline" onClick={closeModal} className="flex-1">
                   Close
-                </button>
+                </Button>
               </div>
             </div>
           </div>

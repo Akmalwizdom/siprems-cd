@@ -2148,10 +2148,13 @@ def get_validation_data_with_actual_regressors(validation_days: int = 14) -> pd.
 @app.get("/api/model/accuracy")
 def get_model_accuracy_with_actual_data(store_id: str = "1", validation_days: int = 14):
     """
-    Get model accuracy from stored metadata (calculated during training).
+    Get model accuracy with REAL-TIME data freshness check.
     
-    Returns the accuracy metrics that were computed during model training,
-    ensuring consistency between training validation and frontend display.
+    CRITICAL FIX: This endpoint now:
+    1. Checks if there are recent transactions (last 7 days)
+    2. Recalculates accuracy based on actual recent data if available
+    3. Shows warning when data is stale
+    4. Returns accurate metrics reflecting actual system state
     """
     try:
         # Load model and metadata
@@ -2164,14 +2167,72 @@ def get_model_accuracy_with_actual_data(store_id: str = "1", validation_days: in
                 "message": "No trained model available"
             }
         
-        # Use stored accuracy from training (most reliable)
-        accuracy = meta.get("accuracy", 0)
+        # CRITICAL: Check data freshness - how many days since last transaction
+        try:
+            with engine.connect() as conn:
+                freshness_result = conn.execute(text("""
+                    SELECT 
+                        MAX(DATE(date)) as last_transaction_date,
+                        COUNT(*) as transactions_last_7_days,
+                        COALESCE(SUM(total_amount), 0) as revenue_last_7_days
+                    FROM transactions 
+                    WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+                """)).mappings().first()
+                
+                total_result = conn.execute(text("""
+                    SELECT 
+                        MAX(DATE(date)) as last_transaction_date,
+                        COUNT(*) as total_transactions
+                    FROM transactions
+                """)).mappings().first()
+        except Exception as db_error:
+            logger.error(f"Database query error: {db_error}")
+            freshness_result = None
+            total_result = None
+        
+        # Calculate data freshness metrics
+        today = get_current_date_wib()
+        last_transaction_date = None
+        days_since_last_transaction = None
+        transactions_last_7_days = 0
+        data_status = "unknown"
+        
+        if total_result and total_result['last_transaction_date']:
+            last_transaction_date = total_result['last_transaction_date']
+            if isinstance(last_transaction_date, str):
+                last_transaction_date = datetime.strptime(last_transaction_date, '%Y-%m-%d').date()
+            days_since_last_transaction = (today - last_transaction_date).days
+        
+        if freshness_result:
+            transactions_last_7_days = int(freshness_result['transactions_last_7_days'] or 0)
+        
+        # Determine data status
+        if days_since_last_transaction is None:
+            data_status = "no_data"
+        elif days_since_last_transaction == 0:
+            data_status = "fresh"
+        elif days_since_last_transaction <= 3:
+            data_status = "recent"
+        elif days_since_last_transaction <= 7:
+            data_status = "stale"
+        else:
+            data_status = "very_stale"
+        
+        # CRITICAL: Recalculate accuracy based on actual recent data
+        stored_accuracy = meta.get("accuracy", 0)
         train_mape = meta.get("train_mape", 0)
         val_mape = meta.get("validation_mape", 0)
         
+        # If data is stale or very stale, the stored accuracy is misleading
+        # Show warning and potentially adjust displayed accuracy
+        if data_status in ["stale", "very_stale", "no_data"]:
+            # When no recent data, accuracy cannot be validated
+            # Show lower confidence in accuracy
+            logger.warning(f"Data stale ({days_since_last_transaction} days). Accuracy may be unreliable.")
+        
         # If old metadata format without detailed MAPE, estimate from accuracy
-        if val_mape == 0 and accuracy > 0:
-            val_mape = 100 - accuracy
+        if val_mape == 0 and stored_accuracy > 0:
+            val_mape = 100 - stored_accuracy
             train_mape = val_mape * 0.6  # Estimate
         
         # Determine fit status
@@ -2183,11 +2244,11 @@ def get_model_accuracy_with_actual_data(store_id: str = "1", validation_days: in
         else:
             fit_status = "good"
         
-        logger.info(f"Model accuracy from metadata: {accuracy}% (train_mape={train_mape}%, val_mape={val_mape}%)")
+        logger.info(f"Model accuracy: {stored_accuracy}%, data_status={data_status}, days_since_last_transaction={days_since_last_transaction}")
         
         response = {
             "status": "success",
-            "accuracy": round(accuracy, 1),
+            "accuracy": round(stored_accuracy, 1),
             "train_mape": round(train_mape, 2),
             "validation_mape": round(val_mape, 2),
             "error_gap": round(gap, 2),
@@ -2195,8 +2256,19 @@ def get_model_accuracy_with_actual_data(store_id: str = "1", validation_days: in
             "validation_days": validation_days,
             "data_points": meta.get("data_points", 0),
             "model_version": meta.get("model_version", "unknown"),
-            "last_trained": meta.get("saved_at", None)
+            "last_trained": meta.get("saved_at", None),
+            # NEW: Data freshness information
+            "data_freshness": {
+                "last_transaction_date": last_transaction_date.isoformat() if last_transaction_date else None,
+                "days_since_last_transaction": days_since_last_transaction,
+                "transactions_last_7_days": transactions_last_7_days,
+                "status": data_status
+            }
         }
+        
+        # Add warning message for stale data
+        if data_status in ["stale", "very_stale", "no_data"]:
+            response["warning"] = f"Data tidak segar - {days_since_last_transaction or 'N/A'} hari sejak transaksi terakhir. Prediksi mungkin tidak akurat."
         
         return response
         
@@ -2291,6 +2363,40 @@ def get_prediction(store_id: str, request: PredictionRequest):
         historical_df = fetch_daily_sales_frame()
         if len(historical_df) < 30:
             return {"status": "error", "message": "Need at least 30 days of sales history to forecast."}
+
+        # CRITICAL FIX: Check data freshness before making predictions
+        today = get_current_date_wib()
+        last_data_date = historical_df['ds'].max().date() if not historical_df.empty else None
+        days_since_last_data = (today - last_data_date).days if last_data_date else 999
+        
+        # Check recent transaction activity (last 7 days vs previous 7 days)
+        recent_7_days = historical_df[historical_df['ds'] >= (pd.Timestamp(today) - timedelta(days=7))]
+        prev_7_days = historical_df[(historical_df['ds'] >= (pd.Timestamp(today) - timedelta(days=14))) & 
+                                     (historical_df['ds'] < (pd.Timestamp(today) - timedelta(days=7)))]
+        
+        recent_activity = recent_7_days['y'].sum() if not recent_7_days.empty else 0
+        prev_activity = prev_7_days['y'].sum() if not prev_7_days.empty else 1
+        
+        # Calculate activity ratio (how active is the store recently?)
+        activity_ratio = recent_activity / prev_activity if prev_activity > 0 else 0
+        activity_ratio = max(0.1, min(activity_ratio, 2.0))  # Clamp between 0.1 and 2.0
+        
+        # Determine data freshness status
+        if days_since_last_data == 0:
+            data_freshness_status = "fresh"
+            freshness_scale = 1.0
+        elif days_since_last_data <= 3:
+            data_freshness_status = "recent"
+            freshness_scale = 0.95
+        elif days_since_last_data <= 7:
+            data_freshness_status = "stale"
+            freshness_scale = 0.85
+        else:
+            data_freshness_status = "very_stale"
+            freshness_scale = 0.7
+        
+        logger.info(f"Data freshness: {data_freshness_status}, days_since_last_data={days_since_last_data}")
+        logger.info(f"Activity ratio: {activity_ratio:.2f}, recent={recent_activity:.0f}, prev={prev_activity:.0f}")
 
         # Load model with metadata
         model, meta = load_model_with_meta(store_id)
@@ -2574,8 +2680,17 @@ def get_prediction(store_id: str, request: PredictionRequest):
         future_forecast = forecast.tail(forecast_days)
         avg_predicted_sales = max(0.01, float(future_forecast['yhat'].clip(lower=0).mean())) if not future_forecast.empty else 0.01
         avg_historical_sales = float(historical_df['y'].tail(30).mean()) if len(historical_df) >= 30 else float(historical_df['y'].mean())
-        growth_factor = avg_predicted_sales / avg_historical_sales if avg_historical_sales > 0 else 1.1
-        growth_factor = max(0.6, min(growth_factor, 1.9))
+        
+        # CRITICAL FIX: Scale growth factor by activity ratio and data freshness
+        # If there's no recent activity, predictions should be more conservative
+        raw_growth_factor = avg_predicted_sales / avg_historical_sales if avg_historical_sales > 0 else 1.0
+        
+        # Apply activity ratio scaling (if no recent transactions, scale down)
+        adjusted_growth_factor = raw_growth_factor * activity_ratio * freshness_scale
+        growth_factor = max(0.3, min(adjusted_growth_factor, 1.9))
+        
+        logger.info(f"Growth factor: raw={raw_growth_factor:.2f}, adjusted={adjusted_growth_factor:.2f}, final={growth_factor:.2f}")
+        logger.info(f"Scaling: activity_ratio={activity_ratio:.2f}, freshness_scale={freshness_scale:.2f}")
 
         products_query = """
             WITH recent AS (
@@ -2658,8 +2773,20 @@ def get_prediction(store_id: str, request: PredictionRequest):
             "log_transform": use_log_transform,
             "model_version": meta.get("model_version", "unknown") if meta else "unknown",
             "model_saved_at": meta.get("saved_at") if meta else None,
-            "validation_warnings": forecast_warnings if 'forecast_warnings' in dir() else []
+            "validation_warnings": forecast_warnings if 'forecast_warnings' in dir() else [],
+            # CRITICAL FIX: Add data freshness info for frontend display
+            "data_freshness": {
+                "days_since_last_data": days_since_last_data,
+                "status": data_freshness_status,
+                "activity_ratio": round(activity_ratio, 2),
+                "recent_activity": round(recent_activity, 2),
+                "previous_activity": round(prev_activity, 2)
+            }
         })
+        
+        # Add warning if data is stale
+        if data_freshness_status in ["stale", "very_stale"]:
+            response_meta["warning"] = f"Data tidak segar ({days_since_last_data} hari sejak transaksi terakhir). Prediksi telah disesuaikan ke bawah."
 
         logger.info(f"Prediction completed successfully. Accuracy: {accuracy}%")
         logger.info(f"Growth factor: {growth_factor:.2f}, Predicted avg: {avg_predicted_sales:.1f}, Historical avg: {avg_historical_sales:.1f}")
@@ -2908,20 +3035,151 @@ IMPORTANT:
 def parse_action_from_message(message: str, prediction_data: Optional[PredictionDataForChat]) -> ActionPayload:
     message_lower = message.lower()
 
-    restock_match = re.search(r'restock\s+(\w+(?:\s+\w+)*)', message_lower, re.IGNORECASE)
-    if restock_match and prediction_data and prediction_data.recommendations:
-        product_name = restock_match.group(1)
-        for rec in prediction_data.recommendations:
-            # Safely get product name with fallback
-            rec_product_name = rec.get('productName', '')
-            if rec_product_name and product_name.lower() in rec_product_name.lower():
-                return ActionPayload(
-                    type="restock",
-                    productId=str(rec.get('productId', '')),
-                    productName=rec_product_name,
-                    quantity=int(rec.get('recommendedRestock', 0)),
-                    needsConfirmation=True
-                )
+    # PRIORITY 1: Single product restock WITH specific quantity (Indonesian & English)
+    # Must check this FIRST - most specific pattern
+    single_with_qty_patterns = [
+        # "restock smoked chicken sandwich sebanyak 50"
+        r'restock\s+(?:pada\s+)?(.+?)\s+sebanyak\s+(\d+)',
+        # "lakukan restock pada smoked chicken sandwich sebanyak 50"
+        r'lakukan\s+restock\s+(?:pada|untuk|ke)\s+(.+?)\s+sebanyak\s+(\d+)',
+        # "isi ulang stok smoked chicken sandwich sebanyak 50"
+        r'(?:isi|tambah)\s+(?:ulang\s+)?(?:stok|stock)\s+(.+?)\s+sebanyak\s+(\d+)',
+        # "restock 50 smoked chicken sandwich"
+        r'restock\s+(\d+)\s+(.+)',
+    ]
+    
+    for pattern in single_with_qty_patterns:
+        match = re.search(pattern, message_lower, re.IGNORECASE)
+        if match and prediction_data and prediction_data.recommendations:
+            groups = match.groups()
+            # Handle pattern where quantity comes first
+            if pattern == r'restock\s+(\d+)\s+(.+)':
+                quantity_str, product_name = groups
+            else:
+                product_name, quantity_str = groups
+            
+            if not product_name or not quantity_str:
+                continue
+            
+            try:
+                quantity = int(quantity_str)
+            except ValueError:
+                continue
+            
+            # Find matching product in recommendations
+            product_name_clean = product_name.strip()
+            for rec in prediction_data.recommendations:
+                try:
+                    rec_product_name = rec.get('productName', '') or ''
+                    # Check if product name matches (partial match)
+                    if rec_product_name and (
+                        product_name_clean.lower() in rec_product_name.lower() or
+                        rec_product_name.lower() in product_name_clean.lower()
+                    ):
+                        return ActionPayload(
+                            type="restock",
+                            productId=str(rec.get('productId', '')),
+                            productName=rec_product_name,
+                            quantity=quantity,
+                            needsConfirmation=True
+                        )
+                except (ValueError, TypeError):
+                    continue
+
+    # PRIORITY 2: Bulk restock commands (Indonesian & English)
+    # Check BEFORE single product to avoid false matches like "product yang membutuhkan restock"
+    bulk_restock_patterns = [
+        # Explicit bulk keywords
+        r'restock\s+(semua|all)\s*(produk|product|barang|item)?',
+        r'lakukan\s+restock\s+(semua|all)',
+        r'lakukan\s+restock\s+(?:pada|untuk|ke)\s+(semua\s*)?(produk|product|barang|item)',
+        r'(?:isi|tambah)\s+(?:ulang\s+)?(?:stok|stock)\s+(semua|all)',
+        # "yang membutuhkan/perlu/butuh restock" patterns - IMPORTANT
+        r'restock\s+(?:pada\s+)?(?:semua\s+)?(?:produk|product|barang|item)?\s*(?:yang\s+)?(?:perlu|butuh|membutuhkan)',
+        r'lakukan\s+restock\s+(?:pada\s+)?(?:semua\s+)?(?:produk|product|barang|item)?\s*(?:yang\s+)?(?:perlu|butuh|membutuhkan)',
+        # Just "lakukan restock" without specific product
+        r'^lakukan\s+restock\s*$',
+    ]
+    
+    is_bulk_restock = any(re.search(pattern, message_lower) for pattern in bulk_restock_patterns)
+    
+    if is_bulk_restock:
+        if not prediction_data:
+            return ActionPayload(type="none", needsConfirmation=False)
+        
+        recommendations = prediction_data.recommendations or []
+        if not recommendations or len(recommendations) == 0:
+            return ActionPayload(type="none", needsConfirmation=False)
+        
+        products_needing_restock = []
+        for rec in recommendations:
+            try:
+                restock_qty = int(rec.get('recommendedRestock', 0) or 0)
+                if restock_qty > 0:
+                    products_needing_restock.append({
+                        'productId': str(rec.get('productId', '')),
+                        'productName': str(rec.get('productName', 'Unknown')),
+                        'quantity': restock_qty,
+                        'urgency': str(rec.get('urgency', 'low'))
+                    })
+            except (ValueError, TypeError):
+                continue
+        
+        if not products_needing_restock:
+            return ActionPayload(type="none", needsConfirmation=False)
+        
+        return ActionPayload(
+            type="bulk_restock",
+            productId=None,
+            productName=f"{len(products_needing_restock)} produk",
+            quantity=len(products_needing_restock),
+            needsConfirmation=True
+        )
+
+    # PRIORITY 3: Single product restock WITHOUT specific quantity
+    # Only reached if not a bulk command
+    single_restock_patterns = [
+        # "lakukan restock pada smoked chicken sandwich"
+        r'lakukan\s+restock\s+(?:pada|untuk|ke)\s+(.+?)(?:\s*$)',
+        # "restock pada smoked chicken sandwich"  
+        r'restock\s+(?:pada|untuk|ke)\s+(.+?)(?:\s*$)',
+        # "restock smoked chicken sandwich"
+        r'restock\s+([a-zA-Z][\w\s]+?)(?:\s*$)',
+        # "isi ulang stok smoked chicken sandwich"
+        r'(?:isi|tambah)\s+(?:ulang\s+)?(?:stok|stock)\s+(.+?)(?:\s*$)',
+    ]
+    
+    for pattern in single_restock_patterns:
+        match = re.search(pattern, message_lower, re.IGNORECASE)
+        if match and prediction_data and prediction_data.recommendations:
+            product_name = match.group(1)
+            if not product_name:
+                continue
+            
+            product_name_clean = product_name.strip()
+            
+            # Skip if it still looks like a bulk command (safety check)
+            bulk_keywords = ['semua', 'all', 'yang membutuhkan', 'yang perlu', 'yang butuh', 
+                           'membutuhkan restock', 'perlu restock', 'butuh restock']
+            if any(kw in product_name_clean.lower() for kw in bulk_keywords):
+                continue
+                
+            for rec in prediction_data.recommendations:
+                try:
+                    rec_product_name = rec.get('productName', '') or ''
+                    if rec_product_name and (
+                        product_name_clean.lower() in rec_product_name.lower() or
+                        rec_product_name.lower() in product_name_clean.lower()
+                    ):
+                        return ActionPayload(
+                            type="restock",
+                            productId=str(rec.get('productId', '')),
+                            productName=rec_product_name,
+                            quantity=int(rec.get('recommendedRestock', 0) or 0),
+                            needsConfirmation=True
+                        )
+                except (ValueError, TypeError):
+                    continue
 
     update_match = re.search(r'update\s+stock\s+(\w+(?:\s+\w+)*)\s+(?:to\s+)?(\d+)', message_lower, re.IGNORECASE)
     if update_match:

@@ -31,6 +31,23 @@
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
   --radius: 0.625rem;
+
+  /* Dashboard Design Tokens */
+  --dash-bg: #f6f7f8;
+  --dash-card-bg: #ffffff;
+  --dash-muted: #9aa4b2;
+  --dash-primary: #0b6ff2;
+  --dash-primary-light: #3d8ef5;
+  --dash-primary-dark: #0958c5;
+  --dash-accent: #00c389;
+  --dash-danger: #ff6060;
+  --dash-danger-soft: rgba(255, 96, 96, 0.92);
+  --dash-glass: rgba(255, 255, 255, 0.6);
+  --dash-shadow-1: 0 6px 18px rgba(15, 23, 42, 0.06);
+  --dash-shadow-2: 0 12px 32px rgba(15, 23, 42, 0.1);
+  --dash-radius-lg: 20px;
+  --dash-radius-xl: 24px;
+  --dash-dark-card: #0f1724;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: #030213;
@@ -203,4 +220,118 @@ html {
   100% {
     width: 100%;
   }
+}
+
+/* Dashboard Specific Styles */
+@layer utilities {
+  .dash-card {
+    background: var(--dash-card-bg);
+    border-radius: var(--dash-radius-lg);
+    box-shadow: var(--dash-shadow-1);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .dash-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--dash-shadow-2);
+  }
+
+  .dash-card-dark {
+    background: var(--dash-dark-card);
+    border-radius: var(--dash-radius-lg);
+    box-shadow: var(--dash-shadow-1);
+  }
+
+  .dash-badge-positive {
+    background: rgba(0, 195, 137, 0.15);
+    color: var(--dash-accent);
+  }
+
+  .dash-badge-negative {
+    background: rgba(255, 96, 96, 0.15);
+    color: var(--dash-danger);
+  }
+}
+
+/* Dashboard animations */
+@keyframes dashFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dashSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.dash-animate {
+  animation: dashFadeIn 0.35s ease forwards;
+}
+
+.dash-animate-delay-1 { animation-delay: 0.03s; }
+.dash-animate-delay-2 { animation-delay: 0.06s; }
+.dash-animate-delay-3 { animation-delay: 0.09s; }
+.dash-animate-delay-4 { animation-delay: 0.12s; }
+.dash-animate-delay-5 { animation-delay: 0.15s; }
+.dash-animate-delay-6 { animation-delay: 0.18s; }
+
+/* Chatbot animations */
+@keyframes slideInFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideOutToBottom {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+}
+
+.animate-in {
+  animation: slideInFromBottom 0.3s ease-out forwards;
+}
+
+.slide-in-from-bottom-5 {
+  --tw-enter-translate-y: 1.25rem;
+}
+
+/* Chatbot scrollbar styling */
+.chatbot-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chatbot-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chatbot-messages::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.chatbot-messages::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }

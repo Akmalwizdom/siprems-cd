@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, Minus, Trash2, ShoppingCart, Loader2, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { Product, CartItem } from '../types';
 import { formatIDR } from '../utils/currency';
+import { Button } from '../components/ui/button';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -209,32 +210,30 @@ export function Transaction() {
       <div>
         <h1 className="text-slate-900 mb-4">Manajemen Transaksi</h1>
         <div className="flex gap-2 border-b border-slate-200">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setActiveTab('pos')}
-            className={`px-6 py-3 font-medium transition-colors relative ${
+            className={`px-6 py-3 font-medium rounded-none relative ${
               activeTab === 'pos'
                 ? 'text-indigo-600 border-b-2 border-indigo-600'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4" />
-              Kasir
-            </div>
-          </button>
-          <button
+            <ShoppingCart className="w-4 h-4" />
+            Kasir
+          </Button>
+          <Button
+            variant="ghost"
             onClick={() => setActiveTab('history')}
-            className={`px-6 py-3 font-medium transition-colors relative ${
+            className={`px-6 py-3 font-medium rounded-none relative ${
               activeTab === 'history'
                 ? 'text-indigo-600 border-b-2 border-indigo-600'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <History className="w-4 h-4" />
-              Riwayat Transaksi
-            </div>
-          </button>
+            <History className="w-4 h-4" />
+            Riwayat Transaksi
+          </Button>
         </div>
       </div>
 
@@ -336,17 +335,14 @@ function POSView({
 
           <div className="flex flex-wrap gap-2">
             {categories.map((category) => (
-              <button
+              <Button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
-                className={`px-4 py-2 rounded-lg transition-colors ${
-                  selectedCategory === category
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                }`}
+                variant={selectedCategory === category ? 'default' : 'outline'}
+                size="sm"
               >
                 {category}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -359,10 +355,11 @@ function POSView({
             </div>
           ) : (
             filteredProducts.map((product) => (
-            <button
+            <Button
               key={product.id}
+              variant="outline"
               onClick={() => addToCart(product)}
-              className="bg-white rounded-xl p-4 border border-slate-200 hover:border-indigo-500 hover:shadow-md transition-all text-left"
+              className="h-auto bg-white rounded-xl p-4 border border-slate-200 hover:border-indigo-500 hover:shadow-md text-left flex-col items-stretch"
             >
               <div className="aspect-square bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg mb-3 flex items-center justify-center">
                 <Package className="w-12 h-12 text-slate-400" />
@@ -373,7 +370,7 @@ function POSView({
                 <span className="text-indigo-600">{formatIDR(product.sellingPrice)}</span>
                 <span className="text-xs text-slate-500">Stok: {product.stock}</span>
               </div>
-            </button>
+            </Button>
           ))
           )}
         </div>
@@ -408,25 +405,29 @@ function POSView({
                       <h4 className="text-slate-900 truncate">{item.product.name}</h4>
                       <p className="text-slate-600">{formatIDR(item.product.sellingPrice)}</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           onClick={() => updateQuantity(item.product.id, -1)}
-                          className="p-1 hover:bg-slate-100 rounded"
                         >
                           <Minus className="w-4 h-4 text-slate-600" />
-                        </button>
+                        </Button>
                         <span className="text-slate-900 w-8 text-center">{item.quantity}</span>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           onClick={() => updateQuantity(item.product.id, 1)}
-                          className="p-1 hover:bg-slate-100 rounded"
                         >
                           <Plus className="w-4 h-4 text-slate-600" />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           onClick={() => removeFromCart(item.product.id)}
-                          className="ml-auto p-1 hover:bg-red-50 rounded text-red-600"
+                          className="ml-auto text-red-600 hover:bg-red-50"
                         >
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -483,13 +484,13 @@ function POSView({
               </select>
             </div>
 
-            <button
+            <Button
               onClick={handleCheckout}
               disabled={cart.length === 0}
-              className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+              className="w-full"
             >
               Bayar
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -563,23 +564,25 @@ function HistoryView({
           Menampilkan {transactions.length > 0 ? (page - 1) * limit + 1 : 0} sampai {Math.min(page * limit, totalItems)} dari {totalItems} data
         </span>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="outline"
+            size="icon-sm"
             onClick={() => setPage((p: number) => Math.max(1, p - 1))}
             disabled={page === 1 || loading}
-            className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft className="w-4 h-4 text-slate-600" />
-          </button>
+          </Button>
           <span className="text-sm text-slate-600">
             Halaman {page} dari {totalPages || 1}
           </span>
-          <button
+          <Button
+            variant="outline"
+            size="icon-sm"
             onClick={() => setPage((p: number) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages || loading}
-            className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronRight className="w-4 h-4 text-slate-600" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

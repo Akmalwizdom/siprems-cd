@@ -55,6 +55,14 @@ export interface PredictionResponse {
     model_version?: string;
     model_saved_at?: string | null;
     validation_warnings?: string[];
+    warning?: string;
+    data_freshness?: {
+      days_since_last_data: number;
+      status: 'fresh' | 'recent' | 'stale' | 'very_stale';
+      activity_ratio: number;
+      recent_activity: number;
+      previous_activity: number;
+    };
   };
 }
 
@@ -119,6 +127,9 @@ class ApiService {
   }
 
   async restockProduct(productId: string, quantity: number): Promise<any> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
     try {
       const response = await fetch(`${this.baseUrl}/restock`, {
         method: 'POST',
@@ -129,14 +140,22 @@ class ApiService {
           productId,
           quantity,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error(`Restock failed: ${response.statusText}`);
+        const errorText = await response.text().catch(() => response.statusText);
+        throw new Error(`Restock failed: ${errorText}`);
       }
 
       return await response.json();
     } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request timeout: Database operation took too long');
+      }
       console.error('Error restocking product:', error);
       throw error;
     }
@@ -184,6 +203,9 @@ class ApiService {
   }
 
   async updateStock(productId: string, newStock: number): Promise<any> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
     try {
       const response = await fetch(`${this.baseUrl}/products/${productId}/stock`, {
         method: 'PUT',
@@ -193,14 +215,22 @@ class ApiService {
         body: JSON.stringify({
           stock: newStock,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error(`Update stock failed: ${response.statusText}`);
+        const errorText = await response.text().catch(() => response.statusText);
+        throw new Error(`Update stock failed: ${errorText}`);
       }
 
       return await response.json();
     } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request timeout: Database operation took too long');
+      }
       console.error('Error updating stock:', error);
       throw error;
     }
@@ -254,6 +284,13 @@ class ApiService {
   }
 }
 
+export interface DataFreshness {
+  last_transaction_date: string | null;
+  days_since_last_transaction: number | null;
+  transactions_last_7_days: number;
+  status: 'fresh' | 'recent' | 'stale' | 'very_stale' | 'no_data' | 'unknown';
+}
+
 export interface ModelAccuracyResponse {
   status: string;
   accuracy: number | null;
@@ -272,6 +309,8 @@ export interface ModelAccuracyResponse {
   };
   message?: string;
   error?: string;
+  warning?: string;
+  data_freshness?: DataFreshness;
 }
 
 export const apiService = new ApiService(API_BASE_URL);

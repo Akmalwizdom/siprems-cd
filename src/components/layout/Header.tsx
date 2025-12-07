@@ -1,5 +1,6 @@
 import { Bell, Search } from 'lucide-react';
 import { mockUser } from '../../utils/mockData';
+import { Button } from '../ui/button';
 
 export function Header() {
   return (
@@ -17,10 +18,10 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button className="relative p-2 hover:bg-slate-100 rounded-lg transition-colors">
+          <Button variant="ghost" size="icon" className="relative">
             <Bell className="w-5 h-5 text-slate-600" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
+          </Button>
 
           <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
             <div className="text-right">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, Upload, X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '../types';
 import { formatIDR } from '../utils/currency';
+import { Button } from '../components/ui/button';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -187,13 +188,10 @@ export function Products() {
           <h1 className="text-slate-900 mb-1">Produk</h1>
           <p className="text-slate-500">Kelola inventaris Anda</p>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
-        >
+        <Button onClick={() => openModal()}>
           <Plus className="w-5 h-5" />
           Tambah Produk
-        </button>
+        </Button>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200">
@@ -210,20 +208,17 @@ export function Products() {
           </div>
           <div className="flex flex-wrap gap-2">
             {categories.map((category) => (
-              <button
+              <Button
                 key={category}
                 onClick={() => {
                   setSelectedCategory(category);
                   setPage(1);
                 }}
-                className={`px-4 py-2 rounded-lg transition-colors ${
-                  selectedCategory === category
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+                variant={selectedCategory === category ? 'default' : 'secondary'}
+                size="sm"
               >
                 {category}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -272,18 +267,22 @@ export function Products() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => openModal(product)}
-                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-indigo-600 transition-colors"
+                        className="text-slate-600 hover:text-indigo-600"
                       >
                         <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => handleDelete(product.id)}
-                        className="p-2 hover:bg-red-50 rounded-lg text-slate-600 hover:text-red-600 transition-colors"
+                        className="text-slate-600 hover:text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -300,23 +299,25 @@ export function Products() {
               Menampilkan {filteredProducts.length > 0 ? (page - 1) * limit + 1 : 0} sampai {Math.min(page * limit, totalItems)} dari {totalItems} produk
             </span>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="outline"
+                size="icon-sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1 || loading}
-                className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4 text-slate-600" />
-              </button>
+              </Button>
               <span className="text-sm text-slate-600">
                 Halaman {page} dari {totalPages}
               </span>
-              <button
+              <Button
+                variant="outline"
+                size="icon-sm"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages || loading}
-                className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4 text-slate-600" />
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -330,12 +331,9 @@ export function Products() {
               <h2 className="text-slate-900">
                 {editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}
               </h2>
-              <button
-                onClick={closeModal}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
+              <Button variant="ghost" size="icon-sm" onClick={closeModal}>
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -459,19 +457,17 @@ export function Products() {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={closeModal}
-                  className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="flex-1"
                 >
                   Batal
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                >
+                </Button>
+                <Button type="submit" className="flex-1">
                   {editingProduct ? 'Perbarui Produk' : 'Tambah Produk'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Save, Building, Clock } from 'lucide-react';
+import { Button } from '../components/ui/button';
 
 interface OpeningHours {
   [key: string]: { open: string; close: string; closed: boolean };
@@ -45,13 +46,10 @@ export function Settings() {
           <h1 className="text-slate-900 mb-1">Pengaturan</h1>
           <p className="text-slate-500">Kelola konfigurasi toko Anda</p>
         </div>
-        <button
-          onClick={handleSave}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
-        >
+        <Button onClick={handleSave}>
           <Save className="w-5 h-5" />
           Simpan Perubahan
-        </button>
+        </Button>
       </div>
 
       {/* Store Profile */}
@@ -153,9 +151,9 @@ export function Settings() {
         <p className="mb-4 text-indigo-100">
           Upgrade ke Pro untuk membuka pengaturan lanjutan, manajemen multi-toko, dan analitik detail.
         </p>
-        <button className="bg-white text-indigo-600 px-6 py-3 rounded-lg hover:bg-indigo-50 transition-colors">
+        <Button variant="outline" className="bg-white text-indigo-600 hover:bg-indigo-50">
           Upgrade Sekarang
-        </button>
+        </Button>
       </div>
     </div>
   );

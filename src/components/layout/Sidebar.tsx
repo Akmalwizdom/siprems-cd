@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router';
 import { LayoutDashboard, ShoppingCart, Package, Brain, Settings, Calendar } from 'lucide-react';
+import { Button } from '../ui/button';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -59,9 +60,9 @@ export function Sidebar() {
             Unlock all features and get unlimited access
           </p>
         </div>
-        <button className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition-colors">
+        <Button className="w-full">
           Upgrade Rp450.000
-        </button>
+        </Button>
       </div>
     </aside>
   );

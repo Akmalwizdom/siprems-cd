@@ -3,6 +3,7 @@ import { TrendingUp, ShoppingBag, Package, AlertCircle, Loader2 } from 'lucide-r
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TimeRange, DashboardMetrics, CategorySales } from '../types';
 import { formatIDR } from '../utils/currency';
+import { Button } from '../components/ui/button';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -68,17 +69,14 @@ export function Dashboard() {
         </div>
         <div className="flex gap-2">
           {timeRanges.map((range) => (
-            <button
+            <Button
               key={range.value}
               onClick={() => setSelectedRange(range.value)}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                selectedRange === range.value
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
+              variant={selectedRange === range.value ? 'default' : 'outline'}
+              size="sm"
             >
               {range.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
