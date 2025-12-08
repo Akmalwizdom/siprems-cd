@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, Loader2, Sparkles } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Bot, X, Send, Loader2, Sparkles, User } from 'lucide-react';
 import { geminiService, type ChatMessage } from '../services/gemini';
 
 export function ChatBot() {
@@ -13,6 +13,43 @@ export function ChatBot() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Resize state
+  const [size, setSize] = useState({ width: 380, height: 600 });
+  const [isResizing, setIsResizing] = useState(false);
+  const resizingRef = useRef(false);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizingRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizingRef.current) return;
+      
+      const newWidth = Math.max(300, Math.min(800, window.innerWidth - e.clientX - 24));
+      const newHeight = Math.max(400, Math.min(window.innerHeight - 150, window.innerHeight - e.clientY - 110));
+
+      setSize({ width: newWidth, height: newHeight });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      resizingRef.current = false;
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -72,68 +109,83 @@ export function ChatBot() {
         <div 
           style={{ 
             position: 'fixed', 
-            bottom: '110px', 
+            bottom: '100px', // Sedikit dinaikkan agar tidak menumpuk dengan tombol bulat
             right: '24px', 
+            width: `${size.width}px`,
+            height: `${size.height}px`,
             zIndex: 9999 
           }}
-          className="w-[380px] h-[520px] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-indigo-200 animate-in"
+          className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-in relative"
         >
-          {/* Header */}
-          <div className="bg-indigo-600 px-5 py-4 flex items-center gap-4">
-            <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-white" />
+          {/* Resize Handle (Top-Left Corner) */}
+          <div
+            onMouseDown={startResizing}
+            className="absolute top-0 left-0 w-6 h-6 cursor-nw-resize z-50 flex items-center justify-center group"
+            title="Drag to resize"
+          >
+            <div className="w-4 h-4 rounded-full bg-slate-200 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+
+          <div 
+            className="bg-indigo-600 px-6 py-4 flex items-center gap-4 shrink-0 cursor-move"
+          >
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <div className="flex-1">
-              <h3 className="text-white font-semibold text-base">SIPREMS AI</h3>
-              <p className="text-indigo-200 text-xs">Asisten Cerdas Anda</p>
+            <div className="flex-1 flex flex-col justify-center select-none">
+              <h3 className="text-white font-semibold text-lg leading-tight">SIPREMS AI</h3>
+              <p className="text-indigo-100 text-xs mt-0.5">Asisten Cerdas Anda</p>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-            >
-              <X className="w-5 h-5 text-white" />
-            </button>
+            {/* Tombol X dihapus dari sini */}
           </div>
 
           {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-indigo-50/30 chatbot-messages">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 chatbot-messages">
             {messages.map((message, idx) => (
               <div
                 key={idx}
-                className={`flex items-end gap-3 ${
+                className={`flex items-end gap-2 w-full ${
+                  // Logic 1: Bubble chat user sebelah kanan (justify-end)
                   message.role === 'user' ? 'justify-end' : 'justify-start'
                 }`}
               >
+                {/* Bot Avatar (Only show for assistant) */}
                 {message.role === 'assistant' && (
-                  <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm order-1">
                     <Bot className="w-5 h-5 text-white" />
                   </div>
                 )}
+
+                {/* Bubble Text */}
                 <div
-                  className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                  className={`max-w-[80%] px-3 py-3 rounded-2xl text-sm leading-relaxed shadow-sm break-words ${
                     message.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-md shadow-md'
-                      : 'bg-white text-slate-700 rounded-bl-md shadow-sm border border-slate-100'
+                      ? 'bg-indigo-600 text-white rounded-br-none ml-auto' 
+                      : 'bg-white text-slate-700 rounded-bl-none border border-slate-100' 
                   }`}
                 >
                   {message.content}
                 </div>
+
+                {/* User Avatar (Only show for user) */}
                 {message.role === 'user' && (
-                  <div className="w-9 h-9 rounded-full bg-slate-300 flex items-center justify-center flex-shrink-0 shadow-sm">
-                    <span className="text-sm font-medium text-slate-600">U</span>
+                  <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0 shadow-sm order-3">
+                    <User className="w-5 h-5 text-slate-600" />
                   </div>
                 )}
               </div>
             ))}
+
+            {/* Loading Indicator */}
             {isLoading && (
-              <div className="flex items-end gap-3 justify-start">
-                <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md">
+              <div className="flex items-end gap-2 justify-start w-full">
+                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
                   <Bot className="w-5 h-5 text-white" />
                 </div>
-                <div className="bg-white text-slate-500 px-4 py-3 rounded-2xl rounded-bl-md shadow-sm border border-slate-100">
+                <div className="bg-white text-slate-500 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm border border-slate-100">
                   <div className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                    <span className="text-sm">Mengetik...</span>
+                    <span className="text-xs">Mengetik...</span>
                   </div>
                 </div>
               </div>
@@ -142,33 +194,32 @@ export function ChatBot() {
           </div>
 
           {/* Input Area */}
-          <div className="p-4 bg-white border-t border-slate-100">
-            <div className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-2 border border-slate-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ketik pesan..."
-                className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
-                disabled={isLoading}
-              />
+          <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 flex items-center gap-2 bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all shadow-inner">
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Ketik pesan..."
+                  className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none min-w-0"
+                  disabled={isLoading}
+                />
+              </div>
               <button
                 onClick={handleSendMessage}
                 disabled={isLoading || !inputValue.trim()}
-                className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                className="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center transition-colors shrink-0 shadow-sm"
               >
-                <Send className="w-5 h-5 text-white" />
+                <Send className="w-5 h-5 text-white ml-0.5" />
               </button>
             </div>
-            <p className="text-xs text-slate-400 text-center mt-2">
-              Didukung oleh AI
-            </p>
           </div>
         </div>
       )}
 
-      {/* Floating Action Button - Bottom Right */}
+      {/* Logic 4: Floating Action Button (Robot <-> Cross) */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         style={{ 
@@ -177,16 +228,16 @@ export function ChatBot() {
           right: '24px', 
           zIndex: 9999 
         }}
-        className={`w-16 h-16 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 hover:scale-105 ${
+        className={`w-10 h-10 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 ${
           isOpen
-            ? 'bg-slate-700 hover:bg-slate-800'
-            : 'bg-indigo-600 hover:bg-indigo-700'
+            ? 'bg-red-500 hover:bg-red-600 rotate-90' // Warna merah dan rotasi saat open (tanda silang)
+            : 'bg-indigo-600 hover:bg-indigo-700 rotate-0' // Warna biru saat closed (robot)
         }`}
       >
         {isOpen ? (
-          <X className="w-7 h-7 text-white" />
+          <X className="w-7 h-7 text-white transition-transform duration-300" />
         ) : (
-          <Bot className="w-7 h-7 text-white" />
+          <Bot className="w-7 h-7 text-white transition-transform duration-300" />
         )}
       </button>
     </>
