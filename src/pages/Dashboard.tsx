@@ -64,7 +64,7 @@ export function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-slate-900 mb-1">Dasbor</h1>
+          <h1 className="text-slate-900 mb-1">Dashboard</h1>
           <p className="text-slate-500">Selamat datang! Berikut ringkasan bisnis Anda</p>
         </div>
         <div className="flex gap-2">

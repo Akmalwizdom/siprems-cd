@@ -1,0 +1,108 @@
+{
+  "log_transform": true,
+  "regressor_scaled": true,
+  "scaler_version": "2.0",
+  "scaler_params": {
+    "mean_": {
+      "promo_intensity": 0.025206611570247933,
+      "holiday_intensity": 0.004132231404958678,
+      "event_intensity": 0.026033057851239664,
+      "closure_intensity": 0.008264462809917356,
+      "transactions_count": 101.6694214876033,
+      "avg_ticket": 226223.06502322195,
+      "lag_7": 23022312.280701756,
+      "rolling_mean_7": 23020425.201775625,
+      "rolling_std_7": 2228359.6892409287
+    },
+    "scale_": {
+      "promo_intensity": 0.11573051608362141,
+      "holiday_intensity": 0.045266327066542655,
+      "event_intensity": 0.11554741675497864,
+      "closure_intensity": 0.09053265413308531,
+      "transactions_count": 7.549712303370939,
+      "avg_ticket": 15490.574017603023,
+      "lag_7": 2379519.328089282,
+      "rolling_mean_7": 680309.7585197374,
+      "rolling_std_7": 1144956.9023005175
+    },
+    "columns": [
+      "promo_intensity",
+      "holiday_intensity",
+      "event_intensity",
+      "closure_intensity",
+      "transactions_count",
+      "avg_ticket",
+      "lag_7",
+      "rolling_mean_7",
+      "rolling_std_7"
+    ],
+    "version": "2.0"
+  },
+  "training_window_days": 365,
+  "data_points": 121,
+  "start_date": "2025-08-09T00:00:00",
+  "end_date": "2025-12-07T00:00:00",
+  "cv": 0.0592,
+  "changepoint_prior_scale": 0.016,
+  "prophet_params": {
+    "yearly_seasonality": false,
+    "weekly_seasonality": 5,
+    "daily_seasonality": false,
+    "seasonality_mode": "additive",
+    "seasonality_prior_scale": 5.0,
+    "changepoint_prior_scale": 0.016,
+    "changepoint_range": 0.7,
+    "n_changepoints": 10
+  },
+  "regressors": [
+    "closure_intensity",
+    "promo_intensity",
+    "holiday_intensity",
+    "event_intensity",
+    "transactions_count",
+    "avg_ticket",
+    "lag_7",
+    "rolling_mean_7",
+    "rolling_std_7",
+    "is_weekend",
+    "is_payday",
+    "is_day_before_holiday",
+    "is_school_holiday",
+    "is_month_start",
+    "is_month_end"
+  ],
+  "scaled_regressors": [
+    "closure_intensity",
+    "promo_intensity",
+    "holiday_intensity",
+    "event_intensity",
+    "transactions_count",
+    "avg_ticket",
+    "lag_7",
+    "rolling_mean_7",
+    "rolling_std_7"
+  ],
+  "binary_regressors": [
+    "is_weekend",
+    "is_payday",
+    "is_day_before_holiday",
+    "is_school_holiday",
+    "is_month_start",
+    "is_month_end"
+  ],
+  "y_mean": 23000522.314049587,
+  "y_std": 1362197.3143304365,
+  "quality_report": {
+    "total_days": 121,
+    "non_zero_ratio": 1.0,
+    "outlier_count": 2,
+    "outlier_ratio": 0.017,
+    "data_age_days": 2
+  },
+  "training_time_seconds": 0.1,
+  "model_version": "20251209_053813",
+  "saved_at": "2025-12-09T05:38:13.088636+07:00",
+  "accuracy": 98.3,
+  "train_mape": 2.38,
+  "validation_mape": 1.74
+}
