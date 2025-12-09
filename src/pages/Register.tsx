@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Mail, Lock, User, Building, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useAuth, getFirebaseErrorMessage } from '../context/AuthContext';
 import { AuthError } from 'firebase/auth';
+import { AuthIllustration } from '../components/AuthIllustration';
 
 interface RegisterForm {
   name: string;
@@ -84,84 +85,80 @@ export function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex w-16 h-16 bg-gradient-to-br from-indigo-600 to-blue-500 rounded-2xl items-center justify-center mb-4">
-              <span className="text-white text-2xl">S</span>
-            </div>
-            <h1 className="text-slate-900 mb-2">Create Account</h1>
-            <p className="text-slate-500">Start your journey with SIPREMS</p>
+    <div className="min-h-screen flex bg-white">
+      {/* Left Column - Form Section */}
+      <div className="flex-1 flex items-center justify-center p-4 lg:p-12 w-full">
+        <div className="w-full max-w-md space-y-8">
+          <div className="text-center lg:text-left">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">Create Account</h1>
+            <p className="text-slate-500">
+              Start your journey with SIPREMS today.
+            </p>
           </div>
 
           {authError && (
-            <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-600 text-sm">{authError}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-slate-700 mb-2">Full Name</label>
+              <label className="block text-slate-700 mb-2 font-medium">Full Name</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
                     errors.name ? 'border-red-500' : 'border-slate-300'
                   }`}
                   placeholder="Enter your full name"
                 />
               </div>
-              {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+              {errors.name && <p className="text-red-500 text-sm mt-1 ml-2">{errors.name}</p>}
             </div>
 
             <div>
-              <label className="block text-slate-700 mb-2">Email</label>
+              <label className="block text-slate-700 mb-2 font-medium">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
                     errors.email ? 'border-red-500' : 'border-slate-300'
                   }`}
                   placeholder="Enter your email"
                 />
               </div>
-              {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+              {errors.email && <p className="text-red-500 text-sm mt-1 ml-2">{errors.email}</p>}
             </div>
 
             <div>
-              <label className="block text-slate-700 mb-2">Store Name</label>
+              <label className="block text-slate-700 mb-2 font-medium">Store Name</label>
               <div className="relative">
-                <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type="text"
                   value={formData.storeName}
                   onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
                     errors.storeName ? 'border-red-500' : 'border-slate-300'
                   }`}
                   placeholder="Enter your store name"
                 />
               </div>
-              {errors.storeName && <p className="text-red-500 text-sm mt-1">{errors.storeName}</p>}
+              {errors.storeName && <p className="text-red-500 text-sm mt-1 ml-2">{errors.storeName}</p>}
             </div>
 
             <div>
-              <label className="block text-slate-700 mb-2">Password</label>
+              <label className="block text-slate-700 mb-2 font-medium">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
                     errors.password ? 'border-red-500' : 'border-slate-300'
                   }`}
                   placeholder="Create a password"
@@ -171,23 +168,22 @@ export function Register() {
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 rounded-full"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </Button>
               </div>
-              {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
+              {errors.password && <p className="text-red-500 text-sm mt-1 ml-2">{errors.password}</p>}
             </div>
 
             <div>
-              <label className="block text-slate-700 mb-2">Confirm Password</label>
+              <label className="block text-slate-700 mb-2 font-medium">Confirm Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
                     errors.confirmPassword ? 'border-red-500' : 'border-slate-300'
                   }`}
                   placeholder="Confirm your password"
@@ -197,32 +193,36 @@ export function Register() {
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 rounded-full"
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </Button>
               </div>
-              {errors.confirmPassword && <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>}
+              {errors.confirmPassword && <p className="text-red-500 text-sm mt-1 ml-2">{errors.confirmPassword}</p>}
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              className="w-full bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-full py-6 text-lg mt-4" 
+              disabled={isLoading}
+            >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Account'}
             </Button>
           </form>
 
-          <div className="relative my-6">
+          <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="bg-white px-2 text-slate-500">Or continue with</span>
+              <span className="bg-white px-2 text-slate-500">or continue with</span>
             </div>
           </div>
 
           <Button
             variant="outline"
             type="button"
-            className="w-full"
+            className="w-full rounded-full py-6 text-slate-600 border-slate-300 hover:bg-slate-50"
             onClick={handleGoogleSignUp}
             disabled={isLoading}
           >
@@ -248,20 +248,25 @@ export function Register() {
                     fill="#EA4335"
                   />
                 </svg>
-                Sign up with Google
+                Sign in with Google
               </>
             )}
           </Button>
 
-          <div className="mt-6 text-center">
+          <div className="mt-8 text-center">
             <p className="text-slate-600">
               Already have an account?{' '}
-              <Link to="/" className="text-indigo-600 hover:text-indigo-700">
+              <Link to="/" className="text-[#4f46e5] hover:text-[#4338ca] font-medium">
                 Sign in
               </Link>
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Right Column - Illustration Section */}
+      <div className="flex flex-1 bg-[#e8e7ff] items-center justify-center p-8 relative overflow-hidden">
+        <AuthIllustration />
       </div>
     </div>
   );

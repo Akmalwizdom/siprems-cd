@@ -4,6 +4,7 @@ import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useAuth, getFirebaseErrorMessage } from '../context/AuthContext';
 import { AuthError } from 'firebase/auth';
+import { AuthIllustration } from '../components/AuthIllustration';
 
 interface LoginForm {
   email: string;
@@ -67,50 +68,46 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex w-16 h-16 bg-gradient-to-br from-indigo-600 to-blue-500 rounded-2xl items-center justify-center mb-4">
-              <span className="text-white text-2xl">S</span>
-            </div>
-            <h1 className="text-slate-900 mb-2">Welcome to SIPREMS</h1>
+    <div className="min-h-screen flex bg-white">
+      {/* Left Column - Form Section */}
+      <div className="flex-1 flex items-center justify-center p-4 lg:p-12 w-full">
+        <div className="w-full max-w-md space-y-8">
+          <div className="text-center lg:text-left">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome Back</h1>
             <p className="text-slate-500">Sign in to your account</p>
           </div>
 
           {authError && (
-            <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-600 text-sm">{authError}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-slate-700 mb-2">Email</label>
+              <label className="block text-slate-700 mb-2 font-medium">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
                     errors.email ? 'border-red-500' : 'border-slate-300'
                   }`}
                   placeholder="Enter your email"
                 />
               </div>
-              {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+              {errors.email && <p className="text-red-500 text-sm mt-1 ml-2">{errors.email}</p>}
             </div>
 
             <div>
-              <label className="block text-slate-700 mb-2">Password</label>
+              <label className="block text-slate-700 mb-2 font-medium">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
                     errors.password ? 'border-red-500' : 'border-slate-300'
                   }`}
                   placeholder="Enter your password"
@@ -120,30 +117,34 @@ export function Login() {
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 rounded-full"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </Button>
               </div>
-              {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
+              {errors.password && <p className="text-red-500 text-sm mt-1 ml-2">{errors.password}</p>}
             </div>
 
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 text-[#4f46e5] border-slate-300 rounded focus:ring-[#4f46e5]" />
                 <span className="text-slate-600">Remember me</span>
               </label>
-              <a href="#" className="text-indigo-600 hover:text-indigo-700">
+              <a href="#" className="text-[#4f46e5] hover:text-[#4338ca] font-medium">
                 Forgot password?
               </a>
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              className="w-full bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-full py-6 text-lg" 
+              disabled={isLoading}
+            >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
             </Button>
           </form>
 
-          <div className="relative my-6">
+          <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200"></div>
             </div>
@@ -155,7 +156,7 @@ export function Login() {
           <Button
             variant="outline"
             type="button"
-            className="w-full"
+            className="w-full rounded-full py-6 text-slate-600 border-slate-300 hover:bg-slate-50"
             onClick={handleGoogleSignIn}
             disabled={isLoading}
           >
@@ -186,15 +187,20 @@ export function Login() {
             )}
           </Button>
 
-          <div className="mt-6 text-center">
+          <div className="mt-8 text-center">
             <p className="text-slate-600">
               Don't have an account?{' '}
-              <Link to="/register" className="text-indigo-600 hover:text-indigo-700">
+              <Link to="/register" className="text-[#4f46e5] hover:text-[#4338ca] font-medium">
                 Sign up
               </Link>
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Right Column - Illustration Section */}
+      <div className="flex flex-1 bg-[#e8e7ff] items-center justify-center p-8 relative overflow-hidden">
+        <AuthIllustration />
       </div>
     </div>
   );

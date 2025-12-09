@@ -8,6 +8,7 @@ import { Products } from '../pages/Products';
 import { CalendarImproved as Calendar } from '../pages/CalendarImproved';
 import { SmartPrediction } from '../pages/SmartPrediction';
 import { Settings } from '../pages/Settings';
+import { Profile } from '../pages/Profile';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 import { GuestRoute } from '../components/auth/GuestRoute';
 
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
           { path: '/calendar', Component: Calendar },
           { path: '/prediction', Component: SmartPrediction },
           { path: '/settings', Component: Settings },
+          { path: '/profile', Component: Profile },
         ],
       },
     ],
