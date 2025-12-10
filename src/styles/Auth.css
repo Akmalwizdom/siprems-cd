@@ -320,3 +320,38 @@
 .footer-link:hover {
   text-decoration: underline;
 }
+
+.auth-illustration-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.auth-illustration-svg {
+  width: 100%;
+  height: auto;
+  max-width: 550px;
+  drop-shadow: 0 10px 30px rgba(79, 70, 229, 0.3);
+}
+
+/* Responsif */
+@media (max-width: 1024px) {
+  .auth-illustration-wrapper {
+    padding: 1.5rem;
+  }
+  .auth-illustration-svg {
+    max-width: 420px;
+  }
+}
+
+@media (max-width: 768px) {
+  .auth-right {
+    display: none; /* sembunyikan ilustrasi di mobile kalau mau */
+  }
+}
