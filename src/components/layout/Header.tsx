@@ -96,7 +96,7 @@ export function Header() {
                   onClick={() => setIsOpen(false)}
                 >
                   <Settings className="w-4 h-4 text-slate-600" />
-                  <span className="text-slate-700">Profile Settings</span>
+                  <span className="text-slate-700">Settings</span>
                 </Link>
                 
                 <div className="my-2 border-t border-gray-200"></div>

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, User, Store, Mail, Lock } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useAuth, getFirebaseErrorMessage } from '../context/AuthContext';
 import { AuthError } from 'firebase/auth';
 import { AuthIllustration } from '../components/AuthIllustration';
+import '../styles/Auth.css'; // Import file CSS manual
 
 interface RegisterForm {
   name: string;
@@ -85,152 +86,152 @@ export function Register() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="auth-page">
       {/* Left Column - Form Section */}
-      <div className="flex-1 flex items-center justify-center p-4 lg:p-12 w-full">
-        <div className="w-full max-w-md space-y-8">
-          <div className="text-center lg:text-left">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">Create Account</h1>
-            <p className="text-slate-500">
-              Start your journey with SIPREMS today.
-            </p>
+      <div className="auth-left">
+        <div className="auth-container">
+          <div className="auth-header">
+            <h1 className="auth-title">Create Account</h1>
+            <p className="auth-subtitle">Start your journey with SIPREMS today.</p>
           </div>
 
           {authError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-600 text-sm">{authError}</p>
+             <div className="auth-error">
+              <div style={{ marginTop: '2px' }}>
+                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+              </div>
+              <p>{authError}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-slate-700 mb-2 font-medium">Full Name</label>
-              <div className="relative">
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label">Full Name</label>
+              <div className="input-wrapper">
+                <div className="input-icon">
+                  <User size={20} />
+                </div>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
-                    errors.name ? 'border-red-500' : 'border-slate-300'
-                  }`}
+                  className={`auth-input ${errors.name ? 'error' : ''}`}
                   placeholder="Enter your full name"
                 />
               </div>
-              {errors.name && <p className="text-red-500 text-sm mt-1 ml-2">{errors.name}</p>}
+              {errors.name && <p className="input-error-msg">{errors.name}</p>}
             </div>
 
-            <div>
-              <label className="block text-slate-700 mb-2 font-medium">Email</label>
-              <div className="relative">
+            <div className="form-group">
+              <label className="form-label">Email Address</label>
+              <div className="input-wrapper">
+                 <div className="input-icon">
+                  <Mail size={20} />
+                </div>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
-                    errors.email ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                  placeholder="Enter your email"
+                  className={`auth-input ${errors.email ? 'error' : ''}`}
+                  placeholder="name@example.com"
                 />
               </div>
-              {errors.email && <p className="text-red-500 text-sm mt-1 ml-2">{errors.email}</p>}
+              {errors.email && <p className="input-error-msg">{errors.email}</p>}
             </div>
 
-            <div>
-              <label className="block text-slate-700 mb-2 font-medium">Store Name</label>
-              <div className="relative">
+            <div className="form-group">
+              <label className="form-label">Store Name</label>
+              <div className="input-wrapper">
+                <div className="input-icon">
+                  <Store size={20} />
+                </div>
                 <input
                   type="text"
                   value={formData.storeName}
                   onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
-                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
-                    errors.storeName ? 'border-red-500' : 'border-slate-300'
-                  }`}
+                  className={`auth-input ${errors.storeName ? 'error' : ''}`}
                   placeholder="Enter your store name"
                 />
               </div>
-              {errors.storeName && <p className="text-red-500 text-sm mt-1 ml-2">{errors.storeName}</p>}
+              {errors.storeName && <p className="input-error-msg">{errors.storeName}</p>}
             </div>
 
-            <div>
-              <label className="block text-slate-700 mb-2 font-medium">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
-                    errors.password ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                  placeholder="Create a password"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 rounded-full"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </Button>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Password</label>
+                <div className="input-wrapper">
+                   <div className="input-icon">
+                    <Lock size={18} />
+                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className={`auth-input ${errors.password ? 'error' : ''}`}
+                    placeholder="Create password"
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {errors.password && <p className="input-error-msg">{errors.password}</p>}
               </div>
-              {errors.password && <p className="text-red-500 text-sm mt-1 ml-2">{errors.password}</p>}
-            </div>
 
-            <div>
-              <label className="block text-slate-700 mb-2 font-medium">Confirm Password</label>
-              <div className="relative">
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
-                    errors.confirmPassword ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                  placeholder="Confirm your password"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 rounded-full"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </Button>
+              <div className="form-group">
+                <label className="form-label">Confirm</label>
+                <div className="input-wrapper">
+                   <div className="input-icon">
+                    <Lock size={18} />
+                  </div>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    className={`auth-input ${errors.confirmPassword ? 'error' : ''}`}
+                    placeholder="Confirm"
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {errors.confirmPassword && <p className="input-error-msg">{errors.confirmPassword}</p>}
               </div>
-              {errors.confirmPassword && <p className="text-red-500 text-sm mt-1 ml-2">{errors.confirmPassword}</p>}
             </div>
 
             <Button 
               type="submit" 
-              className="w-full bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-full py-6 text-lg mt-4" 
+              className="btn-primary" 
               disabled={isLoading}
             >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Account'}
+              {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Create Account'}
             </Button>
           </form>
 
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="bg-white px-2 text-slate-500">or continue with</span>
-            </div>
+          <div className="auth-divider">
+            <div className="divider-line"></div>
+            <span className="divider-text">or continue with</span>
           </div>
 
           <Button
             variant="outline"
             type="button"
-            className="w-full rounded-full py-6 text-slate-600 border-slate-300 hover:bg-slate-50"
+            className="btn-google"
             onClick={handleGoogleSignUp}
             disabled={isLoading}
           >
             {isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="animate-spin" size={20} />
             ) : (
               <>
-                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                <svg width="20" height="20" viewBox="0 0 24 24">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                     fill="#4285F4"
@@ -253,10 +254,10 @@ export function Register() {
             )}
           </Button>
 
-          <div className="mt-8 text-center">
-            <p className="text-slate-600">
+          <div className="auth-footer">
+            <p>
               Already have an account?{' '}
-              <Link to="/" className="text-[#4f46e5] hover:text-[#4338ca] font-medium">
+              <Link to="/" className="footer-link">
                 Sign in
               </Link>
             </p>
@@ -265,7 +266,7 @@ export function Register() {
       </div>
 
       {/* Right Column - Illustration Section */}
-      <div className="flex flex-1 bg-[#e8e7ff] items-center justify-center p-8 relative overflow-hidden">
+      <div className="auth-right">
         <AuthIllustration />
       </div>
     </div>

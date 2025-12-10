@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { useAuth, getFirebaseErrorMessage } from '../context/AuthContext';
 import { AuthError } from 'firebase/auth';
 import { AuthIllustration } from '../components/AuthIllustration';
+import '../styles/Auth.css'; // Import file CSS manual
 
 interface LoginForm {
   email: string;
@@ -68,103 +69,102 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="auth-page">
       {/* Left Column - Form Section */}
-      <div className="flex-1 flex items-center justify-center p-4 lg:p-12 w-full">
-        <div className="w-full max-w-md space-y-8">
-          <div className="text-center lg:text-left">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome Back</h1>
-            <p className="text-slate-500">Sign in to your account</p>
+      <div className="auth-left">
+        <div className="auth-container">
+          <div className="auth-header">
+            <h1 className="auth-title">Welcome Back</h1>
+            <p className="auth-subtitle">Sign in to your account</p>
           </div>
 
           {authError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-600 text-sm">{authError}</p>
+            <div className="auth-error">
+               <div style={{ marginTop: '2px' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+               </div>
+              <p>{authError}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-slate-700 mb-2 font-medium">Email</label>
-              <div className="relative">
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label">Email Address</label>
+              <div className="input-wrapper">
+                <div className="input-icon">
+                  <Mail size={20} />
+                </div>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
-                    errors.email ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                  placeholder="Enter your email"
+                  className={`auth-input ${errors.email ? 'error' : ''}`}
+                  placeholder="name@example.com"
                 />
               </div>
-              {errors.email && <p className="text-red-500 text-sm mt-1 ml-2">{errors.email}</p>}
+              {errors.email && <p className="input-error-msg">{errors.email}</p>}
             </div>
 
-            <div>
-              <label className="block text-slate-700 mb-2 font-medium">Password</label>
-              <div className="relative">
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <div className="input-wrapper">
+                <div className="input-icon">
+                  <Lock size={20} />
+                </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-[#4f46e5] transition-all ${
-                    errors.password ? 'border-red-500' : 'border-slate-300'
-                  }`}
+                  className={`auth-input ${errors.password ? 'error' : ''}`}
                   placeholder="Enter your password"
                 />
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  size="icon-sm"
+                  className="password-toggle"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 rounded-full"
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </Button>
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
-              {errors.password && <p className="text-red-500 text-sm mt-1 ml-2">{errors.password}</p>}
+              {errors.password && <p className="input-error-msg">{errors.password}</p>}
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 text-[#4f46e5] border-slate-300 rounded focus:ring-[#4f46e5]" />
-                <span className="text-slate-600">Remember me</span>
+            <div className="form-actions">
+              <label className="remember-me">
+                <input type="checkbox" className="remember-checkbox" />
+                <span>Remember me</span>
               </label>
-              <a href="#" className="text-[#4f46e5] hover:text-[#4338ca] font-medium">
+              <a href="#" className="forgot-password">
                 Forgot password?
               </a>
             </div>
 
             <Button 
               type="submit" 
-              className="w-full bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-full py-6 text-lg" 
+              className="btn-primary" 
               disabled={isLoading}
             >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
+              {isLoading ? <Loader2 className="animate-spin" size={20} /> : 'Sign In'}
             </Button>
           </form>
 
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="bg-white px-2 text-slate-500">Or continue with</span>
-            </div>
+          <div className="auth-divider">
+            <div className="divider-line"></div>
+            <span className="divider-text">Or continue with</span>
           </div>
 
           <Button
             variant="outline"
             type="button"
-            className="w-full rounded-full py-6 text-slate-600 border-slate-300 hover:bg-slate-50"
+            className="btn-google"
             onClick={handleGoogleSignIn}
             disabled={isLoading}
           >
             {isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="animate-spin" size={20} />
             ) : (
               <>
-                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                <svg width="20" height="20" viewBox="0 0 24 24">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                     fill="#4285F4"
@@ -187,10 +187,10 @@ export function Login() {
             )}
           </Button>
 
-          <div className="mt-8 text-center">
-            <p className="text-slate-600">
+          <div className="auth-footer">
+            <p>
               Don't have an account?{' '}
-              <Link to="/register" className="text-[#4f46e5] hover:text-[#4338ca] font-medium">
+              <Link to="/register" className="footer-link">
                 Sign up
               </Link>
             </p>
@@ -199,7 +199,7 @@ export function Login() {
       </div>
 
       {/* Right Column - Illustration Section */}
-      <div className="flex flex-1 bg-[#e8e7ff] items-center justify-center p-8 relative overflow-hidden">
+      <div className="auth-right">
         <AuthIllustration />
       </div>
     </div>
