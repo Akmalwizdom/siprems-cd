@@ -72,14 +72,14 @@ export function ConfirmDialog({
     >
       {/* Overlay */}
       <div 
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm" 
+        className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm" 
         style={{ zIndex: 99998 }}
       />
       
       {/* Dialog */}
       <div 
         className={cn(
-          "relative bg-white rounded-xl shadow-2xl border flex flex-col animate-in fade-in zoom-in-95 duration-200",
+          "relative bg-white rounded-xl shadow-2xl border flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden",
           isDestructive ? "border-red-200" : "border-slate-200"
         )}
         style={{ 

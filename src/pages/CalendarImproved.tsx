@@ -718,7 +718,7 @@ export function CalendarImproved() {
       {/* Add Event Modal with AI Suggestions */}
       {showModal && !showConfirmModal && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={(e) => {
             // Prevent clicks on overlay from propagating
             if (e.target === e.currentTarget) {
@@ -728,7 +728,7 @@ export function CalendarImproved() {
           }}
         >
           <div 
-            className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 border-b border-slate-200 flex items-center justify-between">
@@ -940,8 +940,8 @@ export function CalendarImproved() {
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full">
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full shadow-2xl">
             <div className="p-6 border-b border-slate-200">
               <h2 className="text-slate-900">Konfirmasi Acara</h2>
             </div>
@@ -976,8 +976,8 @@ export function CalendarImproved() {
 
       {/* Calibration History Modal */}
       {showHistoryModal && selectedEvent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="p-6 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <h2 className="text-slate-900">Event Intelligence</h2>
