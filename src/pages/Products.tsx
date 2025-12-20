@@ -1,24 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Upload, X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '../types';
 import { formatIDR } from '../utils/currency';
 import { Button } from '../components/ui/button';
 import { API_BASE_URL } from '../config';
 import { AdminOnly } from '../components/auth/RoleGuard';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 
 export function Products() {
-  const [filteredProducts, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  // All products from API (cached for client-side filtering)
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categories, setCategories] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState('All');
   
   // Pagination State
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
 
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -32,22 +31,53 @@ export function Products() {
     description: '',
   });
 
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      setPage(1); // Reset to page 1 on search
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+  // Delete confirmation dialog state
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
+  // Load all products once on mount
   useEffect(() => {
     fetchCategories();
+    fetchAllProducts();
   }, []);
 
+  // Reset to page 1 when search or category changes
   useEffect(() => {
-    fetchProducts();
-  }, [page, debouncedSearch, selectedCategory]);
+    setPage(1);
+  }, [searchTerm, selectedCategory]);
+
+  // ============================================
+  // CLIENT-SIDE FILTERING - INSTANT SEARCH
+  // ============================================
+  // Filter products locally based on search term and category
+  // This provides INSTANT results without any API calls or loading
+  const filteredProducts = useMemo(() => {
+    let result = allProducts;
+
+    // Filter by category
+    if (selectedCategory && selectedCategory !== 'All') {
+      result = result.filter(p => p.category === selectedCategory);
+    }
+
+    // Filter by search term (case-insensitive)
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim();
+      result = result.filter(p => 
+        p.name.toLowerCase().includes(searchLower) ||
+        p.category.toLowerCase().includes(searchLower) ||
+        (p.description && p.description.toLowerCase().includes(searchLower))
+      );
+    }
+
+    return result;
+  }, [allProducts, searchTerm, selectedCategory]);
+
+  // Calculate pagination on filtered results
+  const totalItems = filteredProducts.length;
+  const totalPages = Math.ceil(totalItems / limit) || 1;
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (page - 1) * limit;
+    return filteredProducts.slice(startIndex, startIndex + limit);
+  }, [filteredProducts, page, limit]);
 
   const fetchCategories = async () => {
     try {
@@ -59,17 +89,11 @@ export function Products() {
     }
   };
 
-  const fetchProducts = async () => {
-    setLoading(true);
+  // Fetch ALL products once for client-side filtering
+  const fetchAllProducts = async () => {
     try {
-      const query = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-        ...(debouncedSearch && { search: debouncedSearch }),
-        ...(selectedCategory && { category: selectedCategory })
-      });
-      
-      const response = await fetch(`${API_BASE_URL}/products?${query}`);
+      // Fetch with a high limit to get all products
+      const response = await fetch(`${API_BASE_URL}/products?limit=1000`);
       const data = await response.json();
       
       const products = data.data.map((p: any) => ({
@@ -82,15 +106,13 @@ export function Products() {
         description: p.description || ''
       }));
       
-      setProducts(products);
-      setTotalPages(data.total_pages);
-      setTotalItems(data.total);
+      setAllProducts(products);
+      setIsInitialLoad(false);
     } catch (error) {
       console.error('Error fetching products:', error);
-    } finally {
-      setLoading(false);
+      setIsInitialLoad(false);
     }
-  }; 
+  };
 
 
   const getStockStatus = (stock: number): 'critical' | 'low' | 'good' => {
@@ -151,8 +173,8 @@ export function Products() {
     e.preventDefault();
     
     if (editingProduct) {
-      setProducts(
-        filteredProducts.map((p) =>
+      setAllProducts(
+        allProducts.map((p) =>
           p.id === editingProduct.id ? { ...formData as Product, id: editingProduct.id } : p
         )
       );
@@ -161,19 +183,25 @@ export function Products() {
         ...formData as Product,
         id: Date.now().toString(),
       };
-      setProducts([...filteredProducts, newProduct]);
+      setAllProducts([...allProducts, newProduct]);
     }
     
     closeModal();
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus produk ini?')) {
-      setProducts(filteredProducts.filter((p) => p.id !== id));
+  const handleDeleteClick = (product: Product) => {
+    setProductToDelete(product);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (productToDelete) {
+      setAllProducts(allProducts.filter((p) => p.id !== productToDelete.id));
+      setProductToDelete(null);
     }
   };
 
-  if (loading) {
+  // Only show full-page loading on initial load
+  if (isInitialLoad && allProducts.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
@@ -238,14 +266,14 @@ export function Products() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.length === 0 ? (
+              {paginatedProducts.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                     Produk tidak ditemukan
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((product) => (
+                paginatedProducts.map((product) => (
                 <tr key={product.id} className="border-b border-slate-200 hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div>
@@ -281,7 +309,7 @@ export function Products() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => handleDelete(product.id)}
+                          onClick={() => handleDeleteClick(product)}
                           className="text-slate-600 hover:text-red-600 hover:bg-red-50"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -300,14 +328,14 @@ export function Products() {
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
             <span className="text-sm text-slate-500">
-              Menampilkan {filteredProducts.length > 0 ? (page - 1) * limit + 1 : 0} sampai {Math.min(page * limit, totalItems)} dari {totalItems} produk
+              Menampilkan {paginatedProducts.length > 0 ? (page - 1) * limit + 1 : 0} sampai {Math.min(page * limit, totalItems)} dari {totalItems} produk
             </span>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="icon-sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1 || loading}
+                disabled={page === 1}
               >
                 <ChevronLeft className="w-4 h-4 text-slate-600" />
               </Button>
@@ -318,7 +346,7 @@ export function Products() {
                 variant="outline"
                 size="icon-sm"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages || loading}
+                disabled={page === totalPages}
               >
                 <ChevronRight className="w-4 h-4 text-slate-600" />
               </Button>
@@ -478,6 +506,18 @@ export function Products() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!productToDelete}
+        onOpenChange={(open) => !open && setProductToDelete(null)}
+        title="Hapus Produk?"
+        description={`Apakah Anda yakin ingin menghapus produk "${productToDelete?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmText="Hapus"
+        cancelText="Batal"
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
+      />
     </div>
   );
 }

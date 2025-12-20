@@ -9,6 +9,9 @@ import { formatIDR } from '../utils/currency';
 import { Button } from '../components/ui/button';
 import { API_BASE_URL } from '../config';
 import { AdminOnly } from '../components/auth/RoleGuard';
+import { useToast } from '../components/ui/toast';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
+import { Alert, AlertDescription } from '../components/ui/alert';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -97,6 +100,15 @@ export function CalendarImproved() {
   const [aiSuggestion, setAiSuggestion] = useState<AISuggestion | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [userDecision, setUserDecision] = useState<'accepted' | 'edited' | 'rejected' | null>(null);
+  
+  // Delete confirmation state
+  const [eventToDelete, setEventToDelete] = useState<string | null>(null);
+  
+  // Alert state for validation errors
+  const [validationError, setValidationError] = useState<string | null>(null);
+  
+  // Toast hook
+  const { showToast } = useToast();
   
   // National holidays state
   interface NationalHoliday {
@@ -356,7 +368,8 @@ export function CalendarImproved() {
   const handleConfirmEvent = async () => {
     // Validation
     if (!selectedDate || !formData.title) {
-      alert('Please fill in required fields (date and title)');
+      setValidationError('Harap isi kolom yang diperlukan (tanggal dan judul)');
+      setTimeout(() => setValidationError(null), 5000);
       return;
     }
 
@@ -404,34 +417,41 @@ export function CalendarImproved() {
         closeModal();
       } else {
         console.error(`Event ${isEditMode ? 'update' : 'creation'} failed:`, data);
-        alert(`Failed to ${isEditMode ? 'update' : 'create'} event. Please try again.`);
+        showToast(`Gagal ${isEditMode ? 'memperbarui' : 'membuat'} acara. Silakan coba lagi.`, 'error');
         // Note: Modal stays open so user can retry
       }
     } catch (error) {
       console.error(`Event ${isEditMode ? 'update' : 'creation'} error:`, error);
-      alert(`Error ${isEditMode ? 'updating' : 'creating'} event. Please check your connection and try again.`);
+      showToast(`Error ${isEditMode ? 'memperbarui' : 'membuat'} acara. Periksa koneksi Anda.`, 'error');
       // Note: Modal stays open so user can retry
     }
   };
 
-  const handleDeleteEvent = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus acara ini?')) return;
+  const handleDeleteClick = (id: string) => {
+    setEventToDelete(id);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!eventToDelete) return;
     
     try {
-      const response = await fetch(`${API_BASE_URL}/events/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/events/${eventToDelete}`, {
         method: 'DELETE',
       });
       
       if (response.ok) {
         // Refetch events from database
         await refetchEvents();
+        showToast('Acara berhasil dihapus', 'success');
       } else {
         const data = await response.json();
-        alert(data.detail || 'Failed to delete event');
+        showToast(data.detail || 'Gagal menghapus acara', 'error');
       }
     } catch (error) {
       console.error('Error deleting event:', error);
-      alert('Failed to delete event. Please try again.');
+      showToast('Gagal menghapus acara. Silakan coba lagi.', 'error');
+    } finally {
+      setEventToDelete(null);
     }
   };
 
@@ -586,7 +606,7 @@ export function CalendarImproved() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteEvent(event.id);
+                          handleDeleteClick(event.id);
                         }}
                         className="p-1 bg-white/90 hover:bg-white rounded shadow-sm"
                         title="Delete event"
@@ -1054,6 +1074,28 @@ export function CalendarImproved() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Delete Event Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!eventToDelete}
+        onOpenChange={(open) => !open && setEventToDelete(null)}
+        title="Hapus Acara?"
+        description="Apakah Anda yakin ingin menghapus acara ini? Tindakan ini tidak dapat dibatalkan."
+        confirmText="Hapus"
+        cancelText="Batal"
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
+      />
+
+      {/* Validation Error Alert */}
+      {validationError && (
+        <div className="fixed bottom-4 right-4 z-50 max-w-md">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{validationError}</AlertDescription>
+          </Alert>
         </div>
       )}
     </div>

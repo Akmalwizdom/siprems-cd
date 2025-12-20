@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Minus, Trash2, ShoppingCart, Loader2, ChevronLeft, ChevronRight, History, FileSpreadsheet, FileText, Calendar } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, Loader2, ChevronLeft, ChevronRight, History, FileSpreadsheet, FileText, Calendar, Printer } from 'lucide-react';
 import { Product, CartItem } from '../types';
 import { formatIDR } from '../utils/currency';
 import { Button } from '../components/ui/button';
@@ -8,6 +8,7 @@ import { exportToExcel, exportToPDF, printReceipt, type TransactionExport, type 
 import { useToast } from '../components/ui/toast';
 import { useAuth } from '../context/AuthContext';
 import { AdminOnly } from '../components/auth/RoleGuard';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 
 interface TransactionItem {
   product_name: string;
@@ -60,6 +61,10 @@ export function Transaction() {
   // Date filter state
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+
+  // Print receipt dialog state
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [pendingReceiptData, setPendingReceiptData] = useState<TransactionDetail | null>(null);
 
   // Export handlers
   const handleExportExcel = () => {
@@ -255,24 +260,22 @@ export function Transaction() {
       const result = await response.json();
       showToast(`Transaksi berhasil! Total: ${formatIDR(total)}`, 'success');
       
-      // Ask user if they want to print receipt
-      const wantPrint = window.confirm('Cetak struk transaksi?');
-      if (wantPrint) {
-        const receiptData: TransactionDetail = {
-          id: result.transaction_id || 'TRX-TEMP',
-          date: transactionData.date,
-          total_amount: total,
-          payment_method: paymentMethod,
-          order_types: orderType,
-          items: cart.map(item => ({
-            name: item.product.name,
-            quantity: item.quantity,
-            price: item.product.sellingPrice,
-            subtotal: item.product.sellingPrice * item.quantity
-          }))
-        };
-        printReceipt(receiptData);
-      }
+      // Prepare receipt data and show print confirmation dialog
+      const receiptData: TransactionDetail = {
+        id: result.transaction_id || 'TRX-TEMP',
+        date: transactionData.date,
+        total_amount: total,
+        payment_method: paymentMethod,
+        order_types: orderType,
+        items: cart.map(item => ({
+          name: item.product.name,
+          quantity: item.quantity,
+          price: item.product.sellingPrice,
+          subtotal: item.product.sellingPrice * item.quantity
+        }))
+      };
+      setPendingReceiptData(receiptData);
+      setShowPrintDialog(true);
       
       setCart([]);
       setPaymentMethod('Cash');
@@ -362,6 +365,26 @@ export function Transaction() {
           setEndDate={setEndDate}
         />
       )}
+
+      {/* Print Receipt Confirmation Dialog */}
+      <ConfirmDialog
+        open={showPrintDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowPrintDialog(false);
+            setPendingReceiptData(null);
+          }
+        }}
+        title="Cetak Struk?"
+        description="Transaksi berhasil disimpan. Apakah Anda ingin mencetak struk transaksi?"
+        confirmText="Cetak Struk"
+        cancelText="Tidak"
+        onConfirm={() => {
+          if (pendingReceiptData) {
+            printReceipt(pendingReceiptData);
+          }
+        }}
+      />
     </div>
   );
 }

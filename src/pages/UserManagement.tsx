@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Users, Search, Shield, UserCheck, Loader2, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { useToast } from '../components/ui/toast';
 import { API_BASE_URL } from '../config';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 
 interface User {
   id: string;
@@ -16,41 +17,61 @@ interface User {
   updated_at: string;
 }
 
-interface PaginatedResponse {
-  data: User[];
-  total: number;
-  page: number;
-  limit: number;
-  total_pages: number;
-}
-
 export function UserManagement() {
   const { getAuthToken } = useAuth();
   const { showToast } = useToast();
   
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  // All users from API (cached for client-side filtering)
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const limit = 10;
 
-  const fetchUsers = async () => {
+  // Delete confirmation state
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+  // Load all users once on mount
+  useEffect(() => {
+    fetchAllUsers();
+  }, []);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm]);
+
+  // ============================================
+  // CLIENT-SIDE FILTERING - INSTANT SEARCH
+  // ============================================
+  // Filter users locally based on search term
+  // This provides INSTANT results without any API calls or loading
+  const filteredUsers = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return allUsers;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    return allUsers.filter(user => 
+      user.email.toLowerCase().includes(searchLower) ||
+      (user.display_name && user.display_name.toLowerCase().includes(searchLower))
+    );
+  }, [allUsers, searchTerm]);
+
+  // Calculate pagination on filtered results
+  const total = filteredUsers.length;
+  const totalPages = Math.ceil(total / limit) || 1;
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (page - 1) * limit;
+    return filteredUsers.slice(startIndex, startIndex + limit);
+  }, [filteredUsers, page, limit]);
+
+  const fetchAllUsers = async () => {
     try {
-      setLoading(true);
       const token = await getAuthToken();
       
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-      });
-      
-      if (searchTerm) {
-        params.append('search', searchTerm);
-      }
-
-      const response = await fetch(`${API_BASE_URL}/users?${params}`, {
+      // Fetch all users with high limit for client-side filtering
+      const response = await fetch(`${API_BASE_URL}/users?limit=1000`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -60,21 +81,15 @@ export function UserManagement() {
         throw new Error('Failed to fetch users');
       }
 
-      const data: PaginatedResponse = await response.json();
-      setUsers(data.data);
-      setTotalPages(data.total_pages);
-      setTotal(data.total);
+      const data = await response.json();
+      setAllUsers(data.data);
+      setIsInitialLoad(false);
     } catch (error) {
       console.error('Error fetching users:', error);
       showToast('Failed to fetch users', 'error');
-    } finally {
-      setLoading(false);
+      setIsInitialLoad(false);
     }
   };
-
-  useEffect(() => {
-    fetchUsers();
-  }, [page, searchTerm]);
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
     try {
@@ -95,22 +110,24 @@ export function UserManagement() {
       }
 
       showToast(`Role updated to ${newRole}`, 'success');
-      fetchUsers();
+      fetchAllUsers();
     } catch (error: any) {
       console.error('Error updating role:', error);
       showToast(error.message || 'Failed to update role', 'error');
     }
   };
 
-  const handleDeleteUser = async (userId: string, email: string) => {
-    if (!confirm(`Are you sure you want to delete user ${email}? This action cannot be undone.`)) {
-      return;
-    }
+  const handleDeleteClick = (user: User) => {
+    setUserToDelete(user);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!userToDelete) return;
 
     try {
       const token = await getAuthToken();
       
-      const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/users/${userToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -123,10 +140,12 @@ export function UserManagement() {
       }
 
       showToast('User deleted successfully', 'success');
-      fetchUsers();
+      setUserToDelete(null);
+      fetchAllUsers();
     } catch (error: any) {
       console.error('Error deleting user:', error);
       showToast(error.message || 'Failed to delete user', 'error');
+      setUserToDelete(null);
     }
   };
 
@@ -161,21 +180,18 @@ export function UserManagement() {
           type="text"
           placeholder="Cari berdasarkan email atau nama..."
           value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
 
       {/* Users Table */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        {loading ? (
+        {isInitialLoad ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
           </div>
-        ) : users.length === 0 ? (
+        ) : paginatedUsers.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500">Tidak ada pengguna ditemukan</p>
@@ -191,7 +207,7 @@ export function UserManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {users.map((user) => (
+              {paginatedUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -237,7 +253,7 @@ export function UserManagement() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteUser(user.id, user.email)}
+                      onClick={() => handleDeleteClick(user)}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -308,6 +324,18 @@ export function UserManagement() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!userToDelete}
+        onOpenChange={(open) => !open && setUserToDelete(null)}
+        title="Hapus Pengguna?"
+        description={`Apakah Anda yakin ingin menghapus pengguna "${userToDelete?.email}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmText="Hapus"
+        cancelText="Batal"
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
+      />
     </div>
   );
 }
