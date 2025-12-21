@@ -145,13 +145,34 @@ export function exportToPDF(transactions: TransactionExport[], filename: string 
 /**
  * Print receipt for a transaction
  */
-export function printReceipt(transaction: TransactionDetail, storeName: string = 'SIPREMS Store') {
+export interface StoreProfile {
+  name: string;
+  address: string;
+  phone: string;
+  logo_url: string;
+}
+
+export function printReceipt(transaction: TransactionDetail, storeProfile?: StoreProfile) {
+  const storeName = storeProfile?.name || 'SIPREMS Store';
+  const storeAddress = storeProfile?.address || '';
+  const storePhone = storeProfile?.phone || '';
+  const storeLogo = storeProfile?.logo_url || '';
+
   // Create a new window for printing
   const printWindow = window.open('', '_blank', 'width=500,height=600');
   if (!printWindow) {
     alert('Popup blocked! Mohon izinkan popup untuk mencetak struk.');
     return;
   }
+
+  const logoHTML = storeLogo ? `
+    <div class="logo-container">
+      <img src="${storeLogo}" alt="${storeName}" class="store-logo" onerror="this.style.display='none'" />
+    </div>
+  ` : '';
+
+  const addressHTML = storeAddress ? `<div class="store-address">${storeAddress}</div>` : '';
+  const phoneHTML = storePhone ? `<div class="store-phone">Telp: ${storePhone}</div>` : '';
 
   const receiptHTML = `
     <!DOCTYPE html>
@@ -177,8 +198,11 @@ export function printReceipt(transaction: TransactionDetail, storeName: string =
         }
         
         .header { text-align: center; margin-bottom: 5px; }
-        .store-name { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
-        .store-subtitle { font-size: 10px; color: #000; margin-bottom: 5px; }
+        .logo-container { margin-bottom: 8px; }
+        .store-logo { max-width: 60px; max-height: 60px; object-fit: contain; margin: 0 auto; display: block; }
+        .store-name { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 3px; }
+        .store-address { font-size: 10px; color: #000; margin-bottom: 2px; white-space: pre-line; }
+        .store-phone { font-size: 10px; color: #000; margin-bottom: 2px; }
         
         .divider { 
             border-top: 1px dashed #000; 
@@ -249,8 +273,10 @@ export function printReceipt(transaction: TransactionDetail, storeName: string =
     <body>
       <div class="receipt">
         <div class="header">
+          ${logoHTML}
           <div class="store-name">${storeName}</div>
-          <div class="store-subtitle">Sistem Manajemen Inventaris Cerdas</div>
+          ${addressHTML}
+          ${phoneHTML}
         </div>
         
         <div class="divider"></div>

@@ -5,6 +5,7 @@ import { useAuth, getFirebaseErrorMessage } from '../context/AuthContext';
 import { useToast } from '../components/ui/toast';
 import { AuthError } from 'firebase/auth';
 import { AdminOnly } from '../components/auth/RoleGuard';
+import { API_BASE_URL } from '../config';
 
 interface StoreProfile {
   name: string;
@@ -14,7 +15,7 @@ interface StoreProfile {
 }
 
 export function Settings() {
-  const { user, updateDisplayName, updatePhotoURL, updateUserPassword, logout } = useAuth();
+  const { user, updateDisplayName, updatePhotoURL, updateUserPassword, logout, getAuthToken } = useAuth();
   const { showToast } = useToast();
   
   // Display name state
@@ -57,16 +58,27 @@ export function Settings() {
     }
   }, [user]);
 
-  // Load store profile from localStorage
+  // Load store profile from API
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('siprems_store_profile');
-      if (saved) {
-        setStoreProfile(JSON.parse(saved));
+    const fetchStoreProfile = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/settings/store`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.status === 'success' && result.data) {
+            setStoreProfile({
+              name: result.data.name || '',
+              address: result.data.address || '',
+              phone: result.data.phone || '',
+              logo: result.data.logo_url || ''
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching store profile:', error);
       }
-    } catch (error) {
-      console.error('Error loading store profile:', error);
-    }
+    };
+    fetchStoreProfile();
   }, []);
 
   // Handle display name update
@@ -145,13 +157,33 @@ export function Settings() {
   };
 
   // Handle store profile save
-  const handleSaveStoreProfile = () => {
+  const handleSaveStoreProfile = async () => {
     setStoreLoading(true);
     try {
-      localStorage.setItem('siprems_store_profile', JSON.stringify(storeProfile));
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/settings/store`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: storeProfile.name,
+          address: storeProfile.address,
+          phone: storeProfile.phone,
+          logo_url: storeProfile.logo
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save store profile');
+      }
+
       showToast('Profil toko berhasil disimpan', 'success');
-    } catch (error) {
-      showToast('Gagal menyimpan profil toko', 'error');
+    } catch (error: any) {
+      console.error('Error saving store profile:', error);
+      showToast(error.message || 'Gagal menyimpan profil toko', 'error');
     } finally {
       setStoreLoading(false);
     }

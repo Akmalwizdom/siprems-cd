@@ -4,7 +4,7 @@ import { Product, CartItem } from '../types';
 import { formatIDR } from '../utils/currency';
 import { Button } from '../components/ui/button';
 import { API_BASE_URL } from '../config';
-import { exportToExcel, exportToPDF, printReceipt, type TransactionExport, type TransactionDetail } from '../utils/export';
+import { exportToExcel, exportToPDF, printReceipt, type TransactionExport, type TransactionDetail, type StoreProfile } from '../utils/export';
 import { useToast } from '../components/ui/toast';
 import { useAuth } from '../context/AuthContext';
 import { AdminOnly } from '../components/auth/RoleGuard';
@@ -65,6 +65,27 @@ export function Transaction() {
   // Print receipt dialog state
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [pendingReceiptData, setPendingReceiptData] = useState<TransactionDetail | null>(null);
+
+  // Store profile for receipt
+  const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
+
+  // Fetch store profile on mount
+  useEffect(() => {
+    const fetchStoreProfile = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/settings/store`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.status === 'success' && result.data) {
+            setStoreProfile(result.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching store profile:', error);
+      }
+    };
+    fetchStoreProfile();
+  }, []);
 
   // Export handlers
   const handleExportExcel = () => {
@@ -382,7 +403,7 @@ export function Transaction() {
         cancelText="Tidak"
         onConfirm={() => {
           if (pendingReceiptData) {
-            printReceipt(pendingReceiptData);
+            printReceipt(pendingReceiptData, storeProfile || undefined);
           }
         }}
       />
