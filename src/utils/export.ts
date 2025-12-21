@@ -195,9 +195,18 @@ export function printReceipt(transaction: TransactionDetail, storeProfile?: Stor
           background-color: #fff;
           padding: 5mm;
           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          position: relative;
         }
         
-        .header { text-align: center; margin-bottom: 5px; }
+        .receipt-title {
+          position: absolute;
+          top: 5mm;
+          right: 5mm;
+          font-size: 10px;
+          color: #666;
+        }
+        
+        .header { text-align: center; margin-bottom: 5px; margin-top: 15px; }
         .logo-container { margin-bottom: 8px; }
         .store-logo { max-width: 60px; max-height: 60px; object-fit: contain; margin: 0 auto; display: block; }
         .store-name { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 3px; }
@@ -272,6 +281,7 @@ export function printReceipt(transaction: TransactionDetail, storeProfile?: Stor
     </head>
     <body>
       <div class="receipt">
+        <div class="receipt-title">Struk Transaksi</div>
         <div class="header">
           ${logoHTML}
           <div class="store-name">${storeName}</div>
@@ -320,7 +330,7 @@ export function printReceipt(transaction: TransactionDetail, storeProfile?: Stor
             <span>${formatIDR(transaction.total_amount)}</span>
           </div>
           <div class="row">
-            <span class="label">Tunai/Bank</span>
+            <span class="label">Metode Pembayaran</span>
             <span class="value">${transaction.payment_method}</span>
           </div>
         </div>
