@@ -16,14 +16,19 @@ router.get('/metrics', async (req: Request, res: Response) => {
         // Calculate date ranges based on selected period
         switch (range) {
             case 'today':
-                // Today
-                currentStart = today.toISOString().split('T')[0];
-                currentEnd = currentStart;
+                // Today - use full timestamp range for proper comparison
+                // Get start of today (00:00:00) and end of today (23:59:59) in local timezone adjusted
+                const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+                currentStart = todayStart.toISOString();
+                currentEnd = todayEnd.toISOString();
                 // Yesterday
                 const yesterday = new Date(today);
                 yesterday.setDate(yesterday.getDate() - 1);
-                previousStart = yesterday.toISOString().split('T')[0];
-                previousEnd = previousStart;
+                const yesterdayStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+                const yesterdayEnd = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59, 999);
+                previousStart = yesterdayStart.toISOString();
+                previousEnd = yesterdayEnd.toISOString();
                 break;
             case 'week':
                 // This week (Monday to today)
@@ -205,14 +210,14 @@ router.get('/sales-chart', async (req: Request, res: Response) => {
 // Get category sales breakdown (last 90 days) - Required by Dashboard.tsx
 router.get('/category-sales', async (req: Request, res: Response) => {
     try {
-        // Category color mapping (matches Python backend)
+        // Category color mapping (Solid Indigo/Blue Theme)
         const CATEGORY_COLOR_MAP: Record<string, string> = {
-            'Coffee': '#4f46e5',
-            'Tea': '#14b8a6',
-            'Non-Coffee': '#f97316',
-            'Pastry': '#fde047',
-            'Light Meals': '#10b981',
-            'Seasonal': '#ec4899'
+            'Coffee': '#3457D5',      // Royal Azure
+            'Tea': '#8A2BE2',         // Blue Violet
+            'Non-Coffee': '#7B68EE',  // Medium Slate Blue
+            'Pastry': '#4B61D1',      // Slate Indigo
+            'Light Meals': '#6F00FF', // Neon Violet
+            'Seasonal': '#4169E1'     // Royal Blue
         };
 
         // Calculate date 90 days ago
@@ -256,14 +261,21 @@ router.get('/category-sales', async (req: Request, res: Response) => {
 // Get today's summary - items sold, transactions, products sold
 router.get('/today', async (req: Request, res: Response) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        // Get start of today (00:00:00) and end of today (23:59:59)
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const todayStartISO = todayStart.toISOString();
+        const todayEndISO = todayEnd.toISOString();
 
-        // Get today's transactions
+        console.log(`[Dashboard] Today range: ${todayStartISO} to ${todayEndISO}`);
+
+        // Get today's transactions using proper timestamp range
         const { data: todayTx, error: txError } = await supabase
             .from('transactions')
-            .select('id, total_amount, items_count, created_at')
-            .gte('date', today)
-            .lte('date', today);
+            .select('id, total_amount, items_count, created_at, date')
+            .gte('date', todayStartISO)
+            .lte('date', todayEndISO);
 
         if (txError) throw txError;
 
@@ -308,7 +320,7 @@ router.get('/today', async (req: Request, res: Response) => {
             .sort((a, b) => b.quantity - a.quantity);
 
         res.json({
-            date: today,
+            date: todayStartISO.split('T')[0],
             totalTransactions,
             totalRevenue,
             totalItems,

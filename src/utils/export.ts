@@ -178,7 +178,7 @@ export function printReceipt(transaction: TransactionDetail, storeProfile?: Stor
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Struk Transaksi</title>
+      <title></title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -281,7 +281,7 @@ export function printReceipt(transaction: TransactionDetail, storeProfile?: Stor
     </head>
     <body>
       <div class="receipt">
-        <div class="receipt-title">Struk Transaksi</div>
+
         <div class="header">
           ${logoHTML}
           <div class="store-name">${storeName}</div>
