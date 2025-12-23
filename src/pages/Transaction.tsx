@@ -405,7 +405,10 @@ export function Transaction() {
         cancelText="Tidak"
         onConfirm={() => {
           if (pendingReceiptData) {
-            printReceipt(pendingReceiptData, storeProfile || undefined);
+            const success = printReceipt(pendingReceiptData, storeProfile || undefined);
+            if (!success) {
+              showToast('Popup diblokir! Mohon izinkan popup untuk mencetak struk.', 'warning', 5000);
+            }
           }
         }}
       />

@@ -3,6 +3,7 @@ import { mlClient } from '../services/ml-client';
 import { supabase } from '../services/database';
 import { authenticate, requireAdmin, optionalAuth, AuthenticatedRequest } from '../middleware/auth';
 import { holidayService } from '../services/holiday';
+import { productForecastService } from '../services/product-forecast';
 
 const router = Router();
 
@@ -222,109 +223,53 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
             appliedFactor = 1.0;
         }
 
-        // Generate stock recommendations based on predictions and product inventory
-        const recommendations: any[] = [];
+        // Generate stock recommendations using enhanced ProductForecastService
+        // This uses time-weighted sales proportion and category-level growth factors
+        let recommendations: any[] = [];
 
         try {
-            // Fetch products from Supabase
-            const { data: products, error: productError } = await supabase
-                .from('products')
-                .select('id, name, category, stock, selling_price');
+            // Calculate total predicted revenue from ML predictions
+            const totalPredictedRevenue = predictions.reduce((sum: number, p: any) =>
+                sum + (p.yhat || 0), 0);
 
-            console.log(`[Forecast] Product fetch: error=${productError?.message || 'none'}, count=${products?.length || 0}`);
+            const forecastDays = periods || 30;
 
-            if (!productError && products && products.length > 0) {
-                // Fetch historical sales per product from transaction_items
-                const { data: salesHistory, error: salesError } = await supabase
-                    .from('transaction_items')
-                    .select('product_id, quantity');
+            console.log(`[Forecast] Using ProductForecastService for recommendations`);
+            console.log(`[Forecast] Total predicted revenue: ${totalPredictedRevenue.toFixed(0)}, days: ${forecastDays}`);
 
-                // Aggregate sales by product_id
-                const productSales: Record<number, number> = {};
-                let totalUnitsSold = 0;
-                if (!salesError && salesHistory) {
-                    salesHistory.forEach((item: any) => {
-                        const qty = item.quantity || 0;
-                        productSales[item.product_id] = (productSales[item.product_id] || 0) + qty;
-                        totalUnitsSold += qty;
-                    });
-                }
-                console.log(`[Forecast] Sales history: ${totalUnitsSold} total units sold across ${Object.keys(productSales).length} products`);
+            // Get enhanced predictions from ProductForecastService
+            const productPredictions = await productForecastService.generateProductPredictions(
+                totalPredictedRevenue,
+                forecastDays
+            );
 
-                // Calculate total predicted sales over forecast period (in revenue)
-                const totalPredictedRevenue = predictions.reduce((sum: number, p: any) =>
-                    sum + (p.yhat || 0), 0);
+            // Transform to frontend format (compatible with existing RestockRecommendation interface)
+            recommendations = productPredictions.map(pred => ({
+                productId: pred.productId,
+                productName: pred.productName,
+                category: pred.category,
+                currentStock: pred.currentStock,
+                predictedDemand: pred.predictedDemand,
+                recommendedRestock: pred.recommendedRestock,
+                urgency: pred.urgency,
+                // Enhanced fields from new service
+                safetyStock: pred.safetyStock,
+                daysOfStock: pred.daysOfStock,
+                confidence: pred.confidence,
+                categoryGrowthFactor: pred.categoryGrowthFactor,
+                historicalSales: pred.historicalSales,
+                salesProportion: pred.salesProportion,
+            }));
 
-                // Average product price to convert revenue to units
-                const avgProductPrice = products.reduce((sum, p) => sum + (p.selling_price || 0), 0) / products.length;
-                const totalPredictedUnits = avgProductPrice > 0 ? totalPredictedRevenue / avgProductPrice : totalPredictedRevenue;
+            console.log(`[Forecast] Generated ${recommendations.length} product recommendations`);
+            console.log(`[Forecast] High urgency: ${recommendations.filter(r => r.urgency === 'high').length}`);
+            console.log(`[Forecast] Medium urgency: ${recommendations.filter(r => r.urgency === 'medium').length}`);
 
-                const forecastDays = periods || 30;
-
-                // For each product, estimate demand based on historical sales proportion
-                for (const product of products) {
-                    const currentStock = product.stock || 0;
-                    const reorderPoint = 10; // Default reorder point
-
-                    // Calculate this product's sales proportion based on historical data
-                    const productHistoricalSales = productSales[product.id] || 0;
-                    const salesProportion = totalUnitsSold > 0
-                        ? productHistoricalSales / totalUnitsSold
-                        : 1 / products.length; // Fallback to equal distribution if no history
-
-                    // Estimate demand based on sales proportion
-                    const estimatedDemand = Math.ceil(totalPredictedUnits * salesProportion);
-                    const productDailyDemand = forecastDays > 0 ? estimatedDemand / forecastDays : 0;
-
-                    // Calculate days of stock remaining
-                    const daysOfStock = productDailyDemand > 0
-                        ? Math.floor(currentStock / productDailyDemand)
-                        : 999;
-
-                    // Calculate recommended restock to cover forecast period + buffer
-                    const recommendedRestock = Math.max(0, estimatedDemand - currentStock + reorderPoint);
-
-                    // Determine urgency based on days of stock relative to forecast period
-                    // High: stock won't last half the forecast period
-                    // Medium: stock lasts less than forecast period
-                    // Low: stock lasts longer than forecast period
-                    let urgency: 'high' | 'medium' | 'low' = 'low';
-                    if (daysOfStock < forecastDays / 2 || currentStock < reorderPoint) {
-                        urgency = 'high';
-                    } else if (daysOfStock < forecastDays || currentStock < reorderPoint * 2) {
-                        urgency = 'medium';
-                    }
-
-                    // Only add products that actually need restocking
-                    // Include if: restock needed OR stock won't last the forecast period
-                    if (recommendedRestock > 0 || daysOfStock < forecastDays) {
-                        recommendations.push({
-                            productId: product.id.toString(),
-                            productName: product.name,
-                            category: product.category || 'Uncategorized',
-                            currentStock,
-                            predictedDemand: estimatedDemand,
-                            recommendedRestock,
-                            urgency,
-                        });
-                    }
-                }
-
-                // Sort by urgency (high first) then by lowest stock
-                recommendations.sort((a, b) => {
-                    const urgencyOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
-                    const aUrgency = urgencyOrder[a.urgency as string] ?? 2;
-                    const bUrgency = urgencyOrder[b.urgency as string] ?? 2;
-                    if (aUrgency !== bUrgency) {
-                        return aUrgency - bUrgency;
-                    }
-                    return a.currentStock - b.currentStock;
-                });
-            }
         } catch (error) {
             console.error('[Forecast] Error generating recommendations:', error);
             // Continue without recommendations if there's an error
         }
+
 
         // Determine chart date range for filtering events
         const chartStartDate = historicalChartData[0]?.date;

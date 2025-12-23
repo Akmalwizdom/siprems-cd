@@ -221,12 +221,12 @@ export function SmartPrediction() {
         chartData: predictionData,
         recommendations: safeRecommendations,
         eventAnnotations: safeEventAnnotations,
-        meta: predictionMeta ? {
-          applied_factor: predictionMeta.applied_factor ?? 1,
-          forecastDays: predictionMeta.forecastDays ?? 0,
-          accuracy: predictionMeta.accuracy ?? undefined,
-        } : undefined,
-      } : null;
+        meta: {
+          applied_factor: predictionMeta?.applied_factor ?? 1,
+          forecastDays: predictionMeta?.forecastDays ?? 0,
+          accuracy: predictionMeta?.accuracy,
+        },
+      } as PredictionResponse : null;
 
       const { response, action } = await geminiService.chat(
         userMessage,
@@ -348,10 +348,7 @@ export function SmartPrediction() {
         prev.filter(item => item.productId !== productId)
       );
       
-      // Show success alert - using window.alert for guaranteed visibility
-      window.alert(`✅ Berhasil!\n\n${productName}: Berhasil menambahkan ${quantity} unit ke stok.`);
-      
-      // Also set state for in-page alert
+      // Set state for in-page alert
       setRestockAlert({
         show: true,
         type: 'success',
@@ -376,10 +373,7 @@ export function SmartPrediction() {
     } catch (error) {
       console.error('Restock error:', error);
       
-      // Show error alert - using window.alert for guaranteed visibility
-      window.alert(`❌ Gagal!\n\n${productName}: Gagal menyimpan ke database. Silakan coba lagi.`);
-      
-      // Also set state for in-page alert
+      // Set state for in-page alert
       setRestockAlert({
         show: true,
         type: 'error',
@@ -964,26 +958,28 @@ export function SmartPrediction() {
                         "store-closed": "Toko Tutup",
                       };
                       
-                      const isHoliday = event.type === 'holiday';
-                      const numberColor = isHoliday ? 'bg-red-600' : 'bg-blue-600';
-                      
                       return (
                         <div 
                           key={event.id || index}
                           className="flex items-center p-4 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-indigo-100 transition-all group"
+                          style={{ borderLeftWidth: '4px', borderLeftColor: getEventCategoryColor(event.type) }}
                         >
-                          <div className={`w-8 h-8 ${numberColor} text-white rounded-full flex items-center justify-center text-xs font-bold mr-4 flex-shrink-0`}>
-                            {index + 1}
-                          </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-semibold text-slate-900 truncate">
-                              {event.title}
-                            </h3>
-                            <p className="text-xs text-slate-500 truncate mt-0.5">
+                            <div className="flex items-center gap-2">
+                              {/* Colored dot indicator */}
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: getEventCategoryColor(event.type) }}
+                              />
+                              <h3 className="text-sm font-semibold text-slate-900 truncate">
+                                {event.title}
+                              </h3>
+                            </div>
+                            <p className="text-xs text-slate-500 truncate mt-0.5 ml-4">
                               {eventLabelMapping[event.type] || "Informasi event"}
                             </p>
                           </div>
-                          <div className="ml-4 text-[10px] font-medium text-slate-400">
+                          <div className="ml-4 text-sm font-medium text-indigo-600">
                             {new Date(event.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
                           </div>
                         </div>
@@ -1011,7 +1007,21 @@ export function SmartPrediction() {
       />
 
       {/* ChatBot - Only shows after prediction is used */}
-      {state === 'result' && <ChatBot />}
+      {state === 'result' && (
+        <ChatBot 
+          predictionData={{
+            status: 'success',
+            chartData: predictionData,
+            recommendations: restockRecommendations,
+            eventAnnotations: eventAnnotations,
+            meta: {
+              applied_factor: predictionMeta?.applied_factor ?? 1,
+              forecastDays: predictionMeta?.forecastDays ?? 0,
+              accuracy: predictionMeta?.accuracy,
+            },
+          } as PredictionResponse}
+        />
+      )}
     </div>
   );
 }

@@ -36,10 +36,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string, type: ToastType = 'info', duration = 3000) => {
+    console.log('[Toast] showToast called:', { message, type, duration });
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const newToast: Toast = { id, message, type, duration };
     
-    setToasts((prev) => [...prev, newToast]);
+    setToasts((prev) => {
+      console.log('[Toast] Adding toast, current count:', prev.length);
+      return [...prev, newToast];
+    });
 
     if (duration > 0) {
       setTimeout(() => {
@@ -63,18 +67,28 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 import { createPortal } from 'react-dom';
 
 function ToastContainer({ toasts, onClose }: { toasts: Toast[]; onClose: (id: string) => void }) {
+  console.log('[Toast] ToastContainer render, toasts count:', toasts.length);
+  
   if (toasts.length === 0) return null;
 
   return createPortal(
-    <div className="fixed top-4 right-4 z-[99999] flex flex-col gap-2 max-w-sm pointer-events-none">
+    <div 
+      className="fixed top-4 right-4 flex flex-col gap-2 max-w-sm"
+      style={{ zIndex: 999999 }}
+    >
       {toasts.map((toast) => {
         const style = toastStyles[toast.type];
         const Icon = style.icon;
+        console.log('[Toast] Rendering toast:', toast.id, toast.message);
         
         return (
           <div
             key={toast.id}
-            className={`${style.bg} ${style.color} px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-right-full duration-300 pointer-events-auto`}
+            className={`${style.bg} ${style.color} px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3`}
+            style={{ 
+              animation: 'slideInFromRight 0.3s ease-out',
+              border: '2px solid rgba(255,255,255,0.3)'
+            }}
             role="alert"
           >
             <Icon className="w-5 h-5 flex-shrink-0" />

@@ -479,9 +479,9 @@ export function CalendarImproved() {
       });
       const data = await response.json();
       if (data.status === 'success') {
-        alert(`Calibration successful! New impact: ${data.calibration.new_impact.toFixed(3)}`);
+        showToast(`Kalibrasi berhasil! Impact baru: ${data.calibration.new_impact.toFixed(3)}`, 'success');
       } else {
-        alert(data.message);
+        showToast(data.message || 'Kalibrasi gagal', 'warning');
       }
     } catch (error) {
       console.error('Calibration error:', error);
@@ -921,7 +921,7 @@ export function CalendarImproved() {
                     type="button"
                     onClick={() => {
                       if (!formData.title) {
-                        alert('Silakan masukkan judul acara');
+                        showToast('Silakan masukkan judul acara', 'warning');
                         return;
                       }
                       setShowConfirmModal(true);

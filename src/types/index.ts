@@ -73,6 +73,13 @@ export interface RestockRecommendation {
   recommendedRestock: number;
   urgency: 'low' | 'medium' | 'high';
   category?: string;
+  // Enhanced fields from ProductForecastService
+  safetyStock?: number;
+  daysOfStock?: number;
+  confidence?: number;
+  categoryGrowthFactor?: number;
+  historicalSales?: number;
+  salesProportion?: number;
 }
 
 export interface CalendarEventType {

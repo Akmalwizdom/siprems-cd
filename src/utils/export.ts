@@ -152,7 +152,7 @@ export interface StoreProfile {
   logo_url: string;
 }
 
-export function printReceipt(transaction: TransactionDetail, storeProfile?: StoreProfile) {
+export function printReceipt(transaction: TransactionDetail, storeProfile?: StoreProfile): boolean {
   const storeName = storeProfile?.name || 'SIPREMS Store';
   const storeAddress = storeProfile?.address || '';
   const storePhone = storeProfile?.phone || '';
@@ -161,8 +161,8 @@ export function printReceipt(transaction: TransactionDetail, storeProfile?: Stor
   // Create a new window for printing
   const printWindow = window.open('', '_blank', 'width=500,height=600');
   if (!printWindow) {
-    alert('Popup blocked! Mohon izinkan popup untuk mencetak struk.');
-    return;
+    console.error('Popup blocked - unable to open print window');
+    return false; // Let caller handle the notification
   }
 
   const logoHTML = storeLogo ? `
@@ -357,4 +357,5 @@ export function printReceipt(transaction: TransactionDetail, storeProfile?: Stor
 
   printWindow.document.write(receiptHTML);
   printWindow.document.close();
+  return true;
 }

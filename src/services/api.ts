@@ -142,13 +142,21 @@ class ApiService {
     }
   }
 
-  async restockProduct(productId: string, quantity: number): Promise<any> {
+  async restockProduct(productId: string, quantity: number, token?: string): Promise<any> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
 
     try {
       // First, get current stock
       const productResponse = await fetch(`${this.baseUrl}/products/${productId}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : undefined,
         signal: controller.signal,
       });
 
@@ -163,9 +171,7 @@ class ApiService {
       // Update stock using existing PATCH endpoint
       const response = await fetch(`${this.baseUrl}/products/${productId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           stock: newStock,
         }),

@@ -1,8 +1,17 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, X, Send, Loader2, Sparkles, User } from 'lucide-react';
-import { geminiService, type ChatMessage } from '../services/gemini';
+import { Bot, X, Send, Loader2, Sparkles, User, Check, XCircle } from 'lucide-react';
+import { geminiService, type ChatMessage, type CommandAction } from '../services/gemini';
+import { PredictionResponse, apiService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from './ui/toast';
 
-export function ChatBot() {
+interface ChatBotProps {
+  predictionData?: PredictionResponse | null;
+}
+
+export function ChatBot({ predictionData = null }: ChatBotProps) {
+  const { getAuthToken } = useAuth();
+  const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -12,6 +21,8 @@ export function ChatBot() {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<CommandAction | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Resize state
@@ -74,7 +85,7 @@ export function ChatBot() {
     try {
       const response = await geminiService.chat(
         userMessage.content,
-        null,
+        predictionData,
         [...messages, userMessage]
       );
 
@@ -84,6 +95,11 @@ export function ChatBot() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Check if action needs confirmation
+      if (response.action && response.action.type !== 'none' && response.action.needsConfirmation) {
+        setPendingAction(response.action);
+      }
     } catch (error) {
       const errorMessage: ChatMessage = {
         role: 'assistant',
@@ -100,6 +116,116 @@ export function ChatBot() {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const handleConfirmAction = async () => {
+    if (!pendingAction || isConfirming) return;
+
+    setIsConfirming(true);
+    console.log('[ChatBot] Starting confirm action:', pendingAction);
+    console.log('[ChatBot] PredictionData available:', !!predictionData);
+    console.log('[ChatBot] Recommendations count:', predictionData?.recommendations?.length || 0);
+
+    try {
+      if (pendingAction.type === 'restock' && pendingAction.quantity) {
+        // ALWAYS lookup productId by name from recommendations
+        // AI doesn't know real product IDs, it sends product NAME as productId
+        const recommendations = predictionData?.recommendations || [];
+        console.log('[ChatBot] Recommendations available:', recommendations.length);
+        console.log('[ChatBot] ProductName from action:', pendingAction.productName);
+        console.log('[ChatBot] Available products:', recommendations.map(r => `${r.productName} (ID: ${r.productId})`));
+        
+        let productId: string | null = null;
+        const productNameToFind = pendingAction.productName || pendingAction.productId; // AI might send name as productId
+        
+        if (productNameToFind) {
+          // Try exact match first
+          const exactMatch = recommendations.find(
+            (rec) => rec.productName.toLowerCase() === productNameToFind.toLowerCase()
+          );
+          if (exactMatch) {
+            productId = exactMatch.productId;
+            console.log('[ChatBot] Found exact match:', exactMatch.productName, '-> ID:', productId);
+          } else {
+            // Try partial match
+            console.log('[ChatBot] No exact match, trying partial match for:', productNameToFind);
+            const partialMatch = recommendations.find(
+              (rec) => rec.productName.toLowerCase().includes(productNameToFind.toLowerCase()) ||
+                       productNameToFind.toLowerCase().includes(rec.productName.toLowerCase())
+            );
+            if (partialMatch) {
+              productId = partialMatch.productId;
+              console.log('[ChatBot] Found partial match:', partialMatch.productName, '-> ID:', productId);
+            }
+          }
+        }
+
+        if (!productId) {
+          const errorMsg = `Produk "${productNameToFind}" tidak ditemukan di daftar rekomendasi. Pastikan prediksi sudah dijalankan.`;
+          console.error('[ChatBot]', errorMsg);
+          console.error('[ChatBot] Available recommendations:', recommendations.map(r => r.productName));
+          throw new Error(errorMsg);
+        }
+
+        // Get auth token for API call
+        const token = await getAuthToken();
+        console.log('[ChatBot] Calling restockProduct with:', { productId, quantity: pendingAction.quantity, hasToken: !!token });
+        await apiService.restockProduct(productId, pendingAction.quantity, token || undefined);
+        
+        const successMessage: ChatMessage = {
+          role: 'assistant',
+          content: `✅ Berhasil! Stok ${pendingAction.productName || 'produk'} telah ditambah sebanyak ${pendingAction.quantity} unit.`,
+        };
+        setMessages((prev) => [...prev, successMessage]);
+        
+        // Show toast notification
+        showToast(`${pendingAction.productName}: Berhasil menambahkan ${pendingAction.quantity} unit ke stok`, 'success', 5000);
+      } else if (pendingAction.type === 'bulk_restock') {
+        // Handle bulk restock - iterate through recommendations
+        const recommendations = predictionData?.recommendations || [];
+        const bulkToken = await getAuthToken();
+        let successCount = 0;
+        
+        for (const rec of recommendations) {
+          if (rec.recommendedRestock > 0) {
+            try {
+              await apiService.restockProduct(rec.productId, rec.recommendedRestock, bulkToken || undefined);
+              successCount++;
+            } catch (e) {
+              console.error(`Failed to restock ${rec.productName}:`, e);
+            }
+          }
+        }
+        
+        const successMessage: ChatMessage = {
+          role: 'assistant',
+          content: `✅ Berhasil! ${successCount} produk telah di-restock sesuai rekomendasi.`,
+        };
+        setMessages((prev) => [...prev, successMessage]);
+        showToast(`${successCount} produk telah di-restock sesuai rekomendasi`, 'success', 5000);
+      }
+    } catch (error) {
+      console.error('[ChatBot] Confirm action error:', error);
+      const errorDetail = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage: ChatMessage = {
+        role: 'assistant',
+        content: `❌ Gagal melakukan restock: ${errorDetail}`,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      showToast(`Gagal melakukan restock: ${errorDetail}`, 'error', 5000);
+    } finally {
+      setIsConfirming(false);
+      setPendingAction(null);
+    }
+  };
+
+  const handleCancelAction = () => {
+    const cancelMessage: ChatMessage = {
+      role: 'assistant',
+      content: 'Baik, aksi dibatalkan. Ada yang lain yang bisa saya bantu?',
+    };
+    setMessages((prev) => [...prev, cancelMessage]);
+    setPendingAction(null);
   };
 
   return (
@@ -193,28 +319,60 @@ export function ChatBot() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
+          {/* Input Area / Confirmation Buttons */}
           <div className="p-4 bg-white border-t border-slate-100 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="flex-1 flex items-center gap-2 bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all shadow-inner">
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Ketik pesan..."
-                  className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none min-w-0"
-                  disabled={isLoading}
-                />
+            {pendingAction ? (
+              /* Confirmation Buttons */
+              <div className="space-y-3">
+                <p className="text-xs text-center text-slate-500">
+                  Konfirmasi {pendingAction.type === 'restock' ? `restock ${pendingAction.productName}` : 'restock semua produk'}?
+                </p>
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={handleCancelAction}
+                    disabled={isConfirming}
+                    className="flex-1 py-2.5 px-3 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors duration-200"
+                  >
+                    <XCircle className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-sm font-medium">Batal</span>
+                  </button>
+                  <button
+                    onClick={handleConfirmAction}
+                    disabled={isConfirming}
+                    className="flex-1 py-2.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 border border-transparent text-white disabled:opacity-50 flex items-center justify-center gap-2 transition-colors duration-200 shadow-sm"
+                  >
+                    {isConfirming ? (
+                      <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+                    ) : (
+                      <Check className="w-4 h-4 flex-shrink-0" />
+                    )}
+                    <span className="text-sm font-medium">{isConfirming ? 'Proses...' : 'Konfirmasi'}</span>
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={handleSendMessage}
-                disabled={isLoading || !inputValue.trim()}
-                className="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center transition-colors shrink-0 shadow-sm"
-              >
-                <Send className="w-5 h-5 text-white ml-0.5" />
-              </button>
-            </div>
+            ) : (
+              /* Normal Input */
+              <div className="flex items-center gap-3">
+                <div className="flex-1 flex items-center gap-2 bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all shadow-inner">
+                  <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Ketik pesan..."
+                    className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none min-w-0"
+                    disabled={isLoading}
+                  />
+                </div>
+                <button
+                  onClick={handleSendMessage}
+                  disabled={isLoading || !inputValue.trim()}
+                  className="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center transition-colors shrink-0 shadow-sm"
+                >
+                  <Send className="w-5 h-5 text-white ml-0.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
