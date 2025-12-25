@@ -109,3 +109,14 @@ export interface StoreSettings {
 export type TimeRange = 'today' | 'week' | 'month' | 'year';
 
 export type StockStatus = 'critical' | 'low' | 'good';
+
+export interface StockNotification {
+  id: string;
+  productId: string;
+  productName: string;
+  currentStock: number;
+  threshold: number;
+  severity: 'warning' | 'critical';
+  createdAt: string;
+  isRead: boolean;
+}

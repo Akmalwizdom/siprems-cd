@@ -1,8 +1,9 @@
-import { Bell, Search, Settings, LogOut, Menu } from 'lucide-react';
+import { Settings, LogOut, Menu } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
-import { Button } from '../ui/Button';
+
+import { NotificationCenter } from './NotificationCenter';
 
 interface HeaderProps {
   onOpenMobileSidebar: () => void;
@@ -127,8 +128,10 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
             </button>
           </div>
 
-          {/* Right section - Profile */}
+          {/* Right section - Notification + Profile */}
           <div className="flex items-center gap-2 lg:gap-4">
+            {/* Notification Center */}
+            <NotificationCenter />
             <div className="relative pl-2 lg:pl-4" ref={dropdownRef}>
               <div 
                 className="flex items-center gap-2 lg:gap-3 cursor-pointer"
