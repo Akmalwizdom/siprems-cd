@@ -278,12 +278,17 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
             : historicalChartData[historicalChartData.length - 1]?.date;
 
         console.log(`[Forecast] Chart date range: ${chartStartDate} to ${chartEndDate}`);
+        console.log(`[Forecast] Received ${(events || []).length} events from frontend:`, JSON.stringify(events || [], null, 2));
 
         // Calculate event annotations from events - ONLY for events within chart date range
         const eventAnnotations: { date: string; titles: string[]; types: string[] }[] = (events || [])
             .filter((event: any) => {
                 // Filter events to only those within chart date range
-                return event.date >= chartStartDate && event.date <= chartEndDate;
+                const isInRange = event.date >= chartStartDate && event.date <= chartEndDate;
+                if (!isInRange) {
+                    console.log(`[Forecast] Event "${event.title}" on ${event.date} is OUTSIDE chart range`);
+                }
+                return isInRange;
             })
             .reduce((acc: any[], event: any) => {
                 const existing = acc.find(a => a.date === event.date);
@@ -299,6 +304,8 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
                 }
                 return acc;
             }, []);
+
+        console.log(`[Forecast] After filtering: ${eventAnnotations.length} event annotations within chart range`);
 
         // Fetch national holidays for the chart date range and merge into eventAnnotations
         try {

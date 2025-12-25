@@ -56,7 +56,7 @@ router.post('/suggest', authenticate, requireAdmin, async (req: AuthenticatedReq
 // Create event (Admin only)
 router.post('/confirm', authenticate, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { date, title, type, description, impact, user_decision, ai_suggestion } = req.body;
+        const { date, title, type, description, impact_weight } = req.body;
 
         // Validate event type
         const validTypes = ['promotion', 'holiday', 'store-closed', 'event'];
@@ -67,14 +67,13 @@ router.post('/confirm', authenticate, requireAdmin, async (req: AuthenticatedReq
             });
         }
 
+        // Only insert fields that exist in the database schema
         const event = await db.events.create({
             date,
             title,
             type,
-            description,
-            impact,
-            user_decision,
-            ai_suggestion: ai_suggestion ? JSON.stringify(ai_suggestion) : null,
+            description: description || null,
+            impact_weight: impact_weight || 1.0,
         });
 
         res.json({

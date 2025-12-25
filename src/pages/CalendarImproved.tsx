@@ -12,6 +12,7 @@ import { AdminOnly } from '../components/auth/RoleGuard';
 import { useToast } from '../components/ui/Toast';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Alert, AlertDescription } from '../components/ui/Alert';
+import { useAuth } from '../context/AuthContext';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -80,6 +81,7 @@ const getEventConfig = (eventType: string | undefined) => {
 
 export function CalendarImproved() {
   const { events, addEvent, removeEvent, refetchEvents } = useStore();
+  const { getAuthToken } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [showModal, setShowModal] = useState(false);
@@ -252,9 +254,19 @@ export function CalendarImproved() {
 
     setIsLoadingAI(true);
     try {
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('No auth token available for AI suggestion');
+        setIsLoadingAI(false);
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/events/suggest`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({
           title: formData.title,
           user_selected_type: formData.type,
@@ -371,13 +383,22 @@ export function CalendarImproved() {
     }
 
     try {
+      const token = await getAuthToken();
+      if (!token) {
+        showToast('Autentikasi diperlukan. Silakan login ulang.', 'error');
+        return;
+      }
+
       let response;
       
       if (isEditMode && editingEventId) {
         // UPDATE existing event
         response = await fetch(`${API_BASE_URL}/events/${editingEventId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
           body: JSON.stringify({
             date: selectedDate.toISOString().split('T')[0],
             title: formData.title,
@@ -392,7 +413,10 @@ export function CalendarImproved() {
         // CREATE new event
         response = await fetch(`${API_BASE_URL}/events/confirm`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
           body: JSON.stringify({
             date: selectedDate.toISOString().split('T')[0],
             title: formData.title,
@@ -432,8 +456,17 @@ export function CalendarImproved() {
     if (!eventToDelete) return;
     
     try {
+      const token = await getAuthToken();
+      if (!token) {
+        showToast('Autentikasi diperlukan. Silakan login ulang.', 'error');
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/events/${eventToDelete}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
       
       if (response.ok) {
@@ -471,8 +504,17 @@ export function CalendarImproved() {
 
   const handleCalibrateEvent = async (eventId: string) => {
     try {
+      const token = await getAuthToken();
+      if (!token) {
+        showToast('Autentikasi diperlukan. Silakan login ulang.', 'error');
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/events/${eventId}/calibrate`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
       const data = await response.json();
       if (data.status === 'success') {
@@ -902,8 +944,8 @@ export function CalendarImproved() {
                 ></textarea>
               </div>
 
-              {!aiSuggestion && !isLoadingAI && (
-                <div className="flex gap-3 pt-4">
+              {!isLoadingAI && (
+                <div className="flex gap-3 pt-4 border-t border-slate-100 mt-4">
                   <Button
                     type="button"
                     variant="outline"

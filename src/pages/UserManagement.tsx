@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Search, Shield, UserCheck, Loader2, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Users, Search, Loader2, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
@@ -296,34 +296,7 @@ export function UserManagement() {
         </div>
       )}
 
-      {/* Legend */}
-      <div className="bg-slate-50 rounded-lg p-4">
-        <h3 className="font-medium text-slate-700 mb-2">Keterangan Role</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-amber-100 rounded-lg">
-              <Shield className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="font-medium text-slate-900">Admin (Pemilik)</p>
-              <p className="text-sm text-slate-500">
-                Akses penuh: kelola produk, laporan, prediksi, event, dan pengguna
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-slate-100 rounded-lg">
-              <UserCheck className="w-5 h-5 text-slate-600" />
-            </div>
-            <div>
-              <p className="font-medium text-slate-900">User (Kasir)</p>
-              <p className="text-sm text-slate-500">
-                Akses terbatas: transaksi, lihat produk, dan profil pribadi
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

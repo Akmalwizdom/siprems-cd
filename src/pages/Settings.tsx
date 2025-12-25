@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Camera, Lock, LogOut, Loader2, Check, X, Mail, Building, Phone, MapPin, Save } from 'lucide-react';
+import { User, Camera, Lock, LogOut, Loader2, Check, X, Mail, Building, Phone, MapPin, Save, Brain, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useAuth, getFirebaseErrorMessage } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
@@ -50,6 +50,16 @@ export function Settings() {
   const [storeLoading, setStoreLoading] = useState(false);
   const [isEditingLogo, setIsEditingLogo] = useState(false);
 
+  // ML Model state
+  const [modelStatus, setModelStatus] = useState<{
+    exists: boolean;
+    accuracy: number | null;
+    lastTrained: string | null;
+    dataPoints: number | null;
+  } | null>(null);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [retrainLoading, setRetrainLoading] = useState(false);
+
   // Load user data
   useEffect(() => {
     if (user) {
@@ -80,6 +90,77 @@ export function Settings() {
     };
     fetchStoreProfile();
   }, []);
+
+  // Load ML model status
+  useEffect(() => {
+    const fetchModelStatus = async () => {
+      setModelLoading(true);
+      try {
+        const token = await getAuthToken();
+        const response = await fetch(`${API_BASE_URL}/forecast/model/store_1/status`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        if (response.ok) {
+          const result = await response.json();
+          if (result.status === 'success' && result.model) {
+            setModelStatus({
+              exists: result.model.exists || false,
+              accuracy: result.model.accuracy || null,
+              lastTrained: result.model.last_trained || null,
+              dataPoints: result.model.data_points || null,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching model status:', error);
+      } finally {
+        setModelLoading(false);
+      }
+    };
+    fetchModelStatus();
+  }, [getAuthToken]);
+
+  // Handle model retrain
+  const handleRetrainModel = async () => {
+    setRetrainLoading(true);
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        showToast('Anda harus login untuk melatih ulang model', 'error');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/forecast/train`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ store_id: 'store_1', force_retrain: true }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Training failed');
+      }
+
+      showToast('Model berhasil dilatih ulang!', 'success');
+      
+      // Refresh model status
+      setModelStatus({
+        exists: true,
+        accuracy: result.metadata?.accuracy || null,
+        lastTrained: new Date().toISOString(),
+        dataPoints: result.metadata?.data_points || null,
+      });
+    } catch (error: any) {
+      console.error('Error retraining model:', error);
+      showToast(error.message || 'Gagal melatih ulang model', 'error');
+    } finally {
+      setRetrainLoading(false);
+    }
+  };
 
   // Handle display name update
   const handleUpdateName = async () => {
@@ -606,7 +687,107 @@ export function Settings() {
             </div>
           </div>
         </AdminOnly>
+
       </div>
+
+      {/* ML Model Management - Admin Only */}
+      <AdminOnly>
+          <div className="bg-white rounded-xl border border-slate-200 w-full">
+            {/* ML Model Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <Brain className="w-5 h-5 text-indigo-600" />
+                Model Prediksi
+              </h2>
+              <Button 
+                size="sm" 
+                onClick={handleRetrainModel} 
+                disabled={retrainLoading}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                {retrainLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                <span className="ml-1">{retrainLoading ? 'Melatih...' : 'Latih Ulang'}</span>
+              </Button>
+            </div>
+
+            {/* Model Status */}
+            <div className="p-6 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-lg ${modelStatus?.exists ? 'bg-green-100' : 'bg-amber-100'}`}>
+                  {modelStatus?.exists ? (
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  ) : (
+                    <AlertTriangle className="w-6 h-6 text-amber-600" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-slate-900">
+                    {modelLoading ? 'Memuat status...' : modelStatus?.exists ? 'Model Aktif' : 'Model Belum Dilatih'}
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    {modelStatus?.exists 
+                      ? 'Model Prophet siap digunakan untuk prediksi'
+                      : 'Latih model untuk mengaktifkan fitur prediksi'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Model Details */}
+            {modelStatus?.exists && (
+              <>
+                <div className="p-6 border-b border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-slate-500 mb-1">Akurasi Model</p>
+                      <p className="text-2xl font-semibold text-slate-900">
+                        {modelStatus.accuracy ? `${modelStatus.accuracy}%` : 'N/A'}
+                      </p>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      modelStatus.accuracy && modelStatus.accuracy >= 85 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {modelStatus.accuracy && modelStatus.accuracy >= 85 ? 'Baik' : 'Cukup'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 border-b border-slate-100">
+                  <p className="text-sm text-slate-500 mb-1">Terakhir Dilatih</p>
+                  <p className="font-medium text-slate-900">
+                    {modelStatus.lastTrained 
+                      ? new Date(modelStatus.lastTrained).toLocaleString('id-ID', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short'
+                        })
+                      : 'Belum pernah dilatih'}
+                  </p>
+                </div>
+
+                <div className="p-6">
+                  <p className="text-sm text-slate-500 mb-1">Data Training</p>
+                  <p className="font-medium text-slate-900">
+                    {modelStatus.dataPoints ? `${modelStatus.dataPoints} data poin` : 'N/A'}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* Info Box */}
+            <div className="p-6 bg-slate-50 border-t border-slate-100">
+              <p className="text-xs text-slate-500">
+                💡 Latih ulang model secara berkala untuk memasukkan data transaksi terbaru dan meningkatkan akurasi prediksi.
+              </p>
+            </div>
+          </div>
+        </AdminOnly>
+
 
       {/* Password Modal */}
       {showPasswordModal && (
