@@ -476,15 +476,15 @@ function POSView({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Product Catalog */}
-      <div className="lg:col-span-2 space-y-4">
-        <div>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ height: 'calc(100vh - 10rem)', minHeight: '500px' }}>
+      {/* Product Catalog - Scrollable */}
+      <div className="lg:col-span-2 flex flex-col min-h-0">
+        <div className="shrink-0">
           <p className="text-slate-500">Pilih produk untuk membuat transaksi</p>
         </div>
 
-        {/* Search and Filter */}
-        <div className="space-y-4">
+        {/* Search and Filter - Fixed */}
+        <div className="space-y-4 shrink-0 mt-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
@@ -510,51 +510,53 @@ function POSView({
           </div>
         </div>
 
-        {/* Product Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {filteredProducts.length === 0 ? (
-            <div className="col-span-full flex flex-col items-center justify-center py-12 text-slate-500" style={{ width: '100%', gridColumn: '1 / -1', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Package className="w-12 h-12 text-slate-300 mb-2" />
-              <p>Produk tidak ditemukan</p>
-            </div>
-          ) : (
-            filteredProducts.map((product) => (
-            <Button
-              key={product.id}
-              variant="outline"
-              onClick={() => addToCart(product)}
-              className="h-auto bg-white rounded-xl p-4 border border-slate-200 hover:border-indigo-500 hover:shadow-md text-left flex-col items-stretch"
-            >
-              <div className="aspect-square bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                {product.imageUrl ? (
-                  <img 
-                    src={product.imageUrl} 
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <Coffee className="w-12 h-12 text-slate-400" />
-                )}
+        {/* Product Grid - Scrollable */}
+        <div className="flex-1 overflow-y-auto mt-4 min-h-0">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-4">
+            {filteredProducts.length === 0 ? (
+              <div className="col-span-full flex flex-col items-center justify-center py-12 text-slate-500" style={{ width: '100%', gridColumn: '1 / -1', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <Package className="w-12 h-12 text-slate-300 mb-2" />
+                <p>Produk tidak ditemukan</p>
               </div>
-              <h3 className="text-slate-900 mb-1 line-clamp-1">{product.name}</h3>
-              <p className="text-xs text-slate-500 mb-2">{product.category}</p>
-              <div className="flex items-center justify-between">
-                <span className="text-indigo-600">{formatIDR(product.sellingPrice)}</span>
-                <span className="text-xs text-slate-500">Stok: {product.stock}</span>
-              </div>
-            </Button>
-          ))
-          )}
+            ) : (
+              filteredProducts.map((product) => (
+              <Button
+                key={product.id}
+                variant="outline"
+                onClick={() => addToCart(product)}
+                className="h-auto bg-white rounded-xl p-4 border border-slate-200 hover:border-indigo-500 hover:shadow-md text-left flex-col items-stretch"
+              >
+                <div className="aspect-square bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                  {product.imageUrl ? (
+                    <img 
+                      src={product.imageUrl} 
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <Coffee className="w-12 h-12 text-slate-400" />
+                  )}
+                </div>
+                <h3 className="text-slate-900 mb-1 line-clamp-1">{product.name}</h3>
+                <p className="text-xs text-slate-500 mb-2">{product.category}</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-indigo-600">{formatIDR(product.sellingPrice)}</span>
+                  <span className="text-xs text-slate-500">Stok: {product.stock}</span>
+                </div>
+              </Button>
+            ))
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Shopping Cart */}
-      <div className="lg:col-span-1">
-        <div className="bg-white rounded-xl border border-slate-200 sticky top-24">
-          <div className="p-6 border-b border-slate-200">
+      {/* Shopping Cart - Fixed Height */}
+      <div className="lg:col-span-1 flex flex-col min-h-0">
+        <div className="bg-white rounded-xl border border-slate-200 flex flex-col flex-1 min-h-0">
+          <div className="p-6 border-b border-slate-200 shrink-0">
             <div className="flex items-center gap-3 mb-2">
               <ShoppingCart className="w-6 h-6 text-indigo-600" />
               <h2 className="text-slate-900">Pesanan Saat Ini</h2>
@@ -562,7 +564,7 @@ function POSView({
             <p className="text-slate-500">{cart.length} barang</p>
           </div>
 
-          <div className="p-6 max-h-96 overflow-y-auto">
+          <div className="p-6 flex-1 overflow-y-auto min-h-0">
             {cart.length === 0 ? (
               <div className="text-center py-8">
                 <ShoppingCart className="w-12 h-12 text-slate-300 mx-auto mb-3" />
@@ -619,7 +621,7 @@ function POSView({
             )}
           </div>
 
-          <div className="p-6 border-t border-slate-200 space-y-3">
+          <div className="p-6 border-t border-slate-200 space-y-3 shrink-0">
             <div className="flex justify-between text-slate-600">
               <span>Subtotal</span>
               <span>{formatIDR(subtotal)}</span>
