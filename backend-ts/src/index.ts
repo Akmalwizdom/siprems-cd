@@ -24,6 +24,7 @@ import forecastRouter from './routes/forecast';
 import chatRouter from './routes/chat';
 import usersRouter from './routes/users';
 import settingsRouter from './routes/settings';
+import categoriesRouter from './routes/categories';
 
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/products', productsRouter);
@@ -37,6 +38,7 @@ app.use('/api/model', forecastRouter); // Alias for model endpoints
 app.use('/api/chat', chatRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/categories', categoriesRouter);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

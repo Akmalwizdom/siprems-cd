@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Upload, X, Loader2, ChevronLeft, ChevronRight, Coffee } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Upload, X, Loader2, ChevronLeft, ChevronRight, Coffee, Tag } from 'lucide-react';
 import { Product } from '../types';
 import { formatIDR } from '../utils/currency';
 import { Button } from '../components/ui/Button';
@@ -8,7 +8,8 @@ import { AdminOnly } from '../components/auth/RoleGuard';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
-import { useProducts, useCategories } from '../hooks';
+import { useProducts, useCategoryNames } from '../hooks';
+import { useCategories, useCategoryMutations, Category } from '../hooks/useCategories';
 import { useQueryClient } from '@tanstack/react-query';
 import { productKeys } from '../hooks/useProducts';
 
@@ -19,14 +20,14 @@ export function Products() {
   // React Query hooks for cached data fetching
   const queryClient = useQueryClient();
   const { data: allProducts = [], isLoading } = useProducts();
-  const { data: categoriesData = [] } = useCategories();
+  const categoryNames = useCategoryNames();
 
   // Function to invalidate products cache after mutations
   const invalidateProducts = () => {
     queryClient.invalidateQueries({ queryKey: productKeys.all });
   };
 
-  const categories = ['All', ...categoriesData];
+  const categories = ['All', ...categoryNames];
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -51,6 +52,16 @@ export function Products() {
 
   // Delete confirmation dialog state
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+
+  // Category management state
+  const { data: allCategories = [], isLoading: categoriesLoading } = useCategories();
+  const { createCategory, updateCategory, deleteCategory } = useCategoryMutations();
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryFormData, setCategoryFormData] = useState({ name: '', description: '' });
+  const [categoryError, setCategoryError] = useState('');
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
 
 
 
@@ -271,10 +282,16 @@ export function Products() {
           <p className="text-slate-500">Kelola inventaris Anda</p>
         </div>
         <AdminOnly>
-          <Button onClick={() => openModal()}>
-            <Plus className="w-5 h-5" />
-            Tambah Produk
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setShowCategoryManager(true)}>
+              <Tag className="w-4 h-4" />
+              Kelola Kategori
+            </Button>
+            <Button onClick={() => openModal()}>
+              <Plus className="w-5 h-5" />
+              Tambah Produk
+            </Button>
+          </div>
         </AdminOnly>
       </div>
 
@@ -462,12 +479,9 @@ export function Products() {
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">Pilih kategori</option>
-                  <option value="Coffee">Coffee</option>
-                  <option value="Tea">Tea</option>
-                  <option value="Non-Coffee">Non-Coffee</option>
-                  <option value="Pastry">Pastry</option>
-                  <option value="Light Meals">Light Meals</option>
-                  <option value="Seasonal">Seasonal</option>
+                  {categoryNames.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
                 </select>
               </div>
 
@@ -605,6 +619,175 @@ export function Products() {
         onConfirm={handleDeleteConfirm}
         variant="destructive"
       />
+
+      {/* Category Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!categoryToDelete}
+        onOpenChange={(open) => !open && setCategoryToDelete(null)}
+        title="Hapus Kategori?"
+        description={`Apakah Anda yakin ingin menghapus kategori "${categoryToDelete?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmText="Hapus"
+        cancelText="Batal"
+        onConfirm={async () => {
+          if (categoryToDelete) {
+            try {
+              await deleteCategory.mutateAsync(categoryToDelete.id);
+              showToast('Kategori berhasil dihapus', 'success');
+            } catch (error: any) {
+              showToast(error.message || 'Gagal menghapus kategori', 'error');
+            }
+            setCategoryToDelete(null);
+          }
+        }}
+        variant="destructive"
+      />
+
+      {/* Category Manager Modal */}
+      {showCategoryManager && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full max-h-[80vh] overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <Tag className="w-5 h-5 text-indigo-600" />
+                Kelola Kategori
+              </h2>
+              <button onClick={() => { setShowCategoryManager(false); setShowCategoryForm(false); }} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto max-h-[60vh]">
+              {/* Add Category Button / Form */}
+              {showCategoryForm ? (
+                <div className="p-4 border-b border-slate-100 bg-slate-50">
+                  {categoryError && (
+                    <div className="p-3 bg-red-50 text-red-700 rounded-lg mb-3 text-sm">{categoryError}</div>
+                  )}
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={categoryFormData.name}
+                      onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
+                      placeholder="Nama kategori"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <input
+                      type="text"
+                      value={categoryFormData.description}
+                      onChange={(e) => setCategoryFormData({ ...categoryFormData, description: e.target.value })}
+                      placeholder="Deskripsi (opsional)"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => { setShowCategoryForm(false); setEditingCategory(null); setCategoryError(''); }}
+                      >
+                        Batal
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        disabled={createCategory.isPending || updateCategory.isPending}
+                        onClick={async () => {
+                          setCategoryError('');
+                          if (!categoryFormData.name.trim()) {
+                            setCategoryError('Nama kategori harus diisi');
+                            return;
+                          }
+                          try {
+                            if (editingCategory) {
+                              await updateCategory.mutateAsync({ id: editingCategory.id, data: categoryFormData });
+                              showToast('Kategori berhasil diperbarui', 'success');
+                            } else {
+                              await createCategory.mutateAsync(categoryFormData);
+                              showToast('Kategori berhasil ditambahkan', 'success');
+                            }
+                            setShowCategoryForm(false);
+                            setEditingCategory(null);
+                            setCategoryFormData({ name: '', description: '' });
+                          } catch (error: any) {
+                            setCategoryError(error.message || 'Gagal menyimpan kategori');
+                          }
+                        }}
+                      >
+                        {(createCategory.isPending || updateCategory.isPending) ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingCategory ? 'Simpan' : 'Tambah')}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 border-b border-slate-100">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      setEditingCategory(null);
+                      setCategoryFormData({ name: '', description: '' });
+                      setCategoryError('');
+                      setShowCategoryForm(true);
+                    }}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Tambah Kategori Baru
+                  </Button>
+                </div>
+              )}
+
+              {/* Category List */}
+              <div className="divide-y divide-slate-100">
+                {categoriesLoading ? (
+                  <div className="p-6 text-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-indigo-600 mx-auto" />
+                  </div>
+                ) : allCategories.length === 0 ? (
+                  <div className="p-6 text-center text-slate-500">
+                    Belum ada kategori.
+                  </div>
+                ) : (
+                  allCategories.map((cat) => (
+                    <div key={cat.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                      <div>
+                        <p className="font-medium text-slate-900">{cat.name}</p>
+                        {cat.description && <p className="text-sm text-slate-500">{cat.description}</p>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            setEditingCategory(cat);
+                            setCategoryFormData({ name: cat.name, description: cat.description || '' });
+                            setCategoryError('');
+                            setShowCategoryForm(true);
+                          }}
+                        >
+                          <Edit2 className="w-4 h-4 text-slate-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={deleteCategory.isPending}
+                          onClick={() => setCategoryToDelete(cat)}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100">
+              <p className="text-xs text-slate-500">💡 Kategori tidak dapat dihapus jika masih digunakan oleh produk.</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

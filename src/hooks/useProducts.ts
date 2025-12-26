@@ -57,9 +57,10 @@ export function useProducts() {
 }
 
 /**
- * Hook to fetch product categories
+ * Hook to fetch product categories as string array
+ * @deprecated Use useCategoryNames from useCategories.ts instead
  */
-export function useCategories() {
+export function useProductCategoryNames() {
     return useQuery({
         queryKey: productKeys.categories(),
         queryFn: fetchCategories,
