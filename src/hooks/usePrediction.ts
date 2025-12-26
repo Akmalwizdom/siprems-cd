@@ -152,6 +152,29 @@ export function usePrediction(predictionRange: 7 | 30 | 90) {
         }
     }, [queryClient, predictionRange]);
 
+    // Update stock values in cache after restock (for realtime UI update)
+    const updateStockAfterRestock = useCallback((productId: string, restockQuantity: number) => {
+        const currentData = queryClient.getQueryData<CachedPredictionData>(predictionKeys.result(predictionRange));
+        if (currentData) {
+            const updatedData: CachedPredictionData = {
+                ...currentData,
+                restockRecommendations: currentData.restockRecommendations.map(item => {
+                    if (item.productId === productId) {
+                        const newCurrentStock = item.currentStock + restockQuantity;
+                        const newRecommendedRestock = Math.max(0, item.recommendedRestock - restockQuantity);
+                        return {
+                            ...item,
+                            currentStock: newCurrentStock,
+                            recommendedRestock: newRecommendedRestock,
+                        };
+                    }
+                    return item;
+                }),
+            };
+            queryClient.setQueryData(predictionKeys.result(predictionRange), updatedData);
+        }
+    }, [queryClient, predictionRange]);
+
     // Clear cache
     const clearCache = useCallback(() => {
         queryClient.removeQueries({ queryKey: predictionKeys.result(predictionRange) });
@@ -169,6 +192,7 @@ export function usePrediction(predictionRange: 7 | 30 | 90) {
         // Actions
         runPrediction,
         updateRecommendations,
+        updateStockAfterRestock,
         clearCache,
     };
 }

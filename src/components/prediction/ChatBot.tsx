@@ -7,9 +7,10 @@ import { useToast } from '../ui/Toast';
 
 interface ChatBotProps {
   predictionData?: PredictionResponse | null;
+  onRestockSuccess?: (productId: string, quantity: number) => void;
 }
 
-export function ChatBot({ predictionData = null }: ChatBotProps) {
+export function ChatBot({ predictionData = null, onRestockSuccess }: ChatBotProps) {
   const { getAuthToken } = useAuth();
   const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
@@ -170,6 +171,9 @@ export function ChatBot({ predictionData = null }: ChatBotProps) {
         
         // Show toast notification
         showToast(`${pendingAction.productName}: Berhasil menambahkan ${pendingAction.quantity} unit ke stok`, 'success', 5000);
+        
+        // Notify parent to update stock in UI (realtime update)
+        onRestockSuccess?.(productId, pendingAction.quantity);
       } else if (pendingAction.type === 'bulk_restock') {
         // Handle bulk restock - iterate through recommendations
         const recommendations = predictionData?.recommendations || [];
@@ -181,6 +185,8 @@ export function ChatBot({ predictionData = null }: ChatBotProps) {
             try {
               await apiService.restockProduct(rec.productId, rec.recommendedRestock, bulkToken || undefined);
               successCount++;
+              // Notify parent to update stock in UI (realtime update)
+              onRestockSuccess?.(rec.productId, rec.recommendedRestock);
             } catch (e) {
               console.error(`Failed to restock ${rec.productName}:`, e);
             }

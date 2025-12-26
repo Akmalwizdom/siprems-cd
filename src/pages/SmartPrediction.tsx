@@ -26,7 +26,7 @@ export function SmartPrediction() {
   const [predictionRange, setPredictionRange] = useState<PredictionRange>(30);
   
   // Use cached prediction hook
-  const { cachedData, hasCachedData, isRunning, runPrediction, updateRecommendations } = usePrediction(predictionRange);
+  const { cachedData, hasCachedData, isRunning, runPrediction, updateRecommendations, updateStockAfterRestock } = usePrediction(predictionRange);
   
   // Derive state from cache
   const [state, setState] = useState<PredictionState>('idle');
@@ -1012,6 +1012,23 @@ export function SmartPrediction() {
               accuracy: predictionMeta?.accuracy,
             },
           } as PredictionResponse}
+          onRestockSuccess={(productId, quantity) => {
+            // Update cache for persistence
+            updateStockAfterRestock(productId, quantity);
+            // Update local state for immediate UI update
+            setRestockRecommendations(prev =>
+              prev.map(item => {
+                if (item.productId === productId) {
+                  return {
+                    ...item,
+                    currentStock: item.currentStock + quantity,
+                    recommendedRestock: Math.max(0, item.recommendedRestock - quantity),
+                  };
+                }
+                return item;
+              })
+            );
+          }}
         />
       )}
     </div>
