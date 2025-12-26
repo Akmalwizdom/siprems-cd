@@ -1,8 +1,12 @@
+// Stock Notification Center Component
+// Handles displaying and managing stock-level notifications
+
 import { useState, useRef, useEffect } from 'react';
 import { Bell, Package, AlertTriangle, CheckCheck, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useStockNotification } from '../../hooks/useStockNotification';
 import { StockNotification } from '../../types';
+import { NotificationBadge } from '../../components/ui/NotificationBadge';
 
 function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString);
@@ -65,17 +69,8 @@ export function NotificationCenter() {
           20%, 40%, 60%, 80% { transform: rotate(5deg); }
         }
         
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.6; }
-        }
-        
         .notification-bell-shake {
           animation: bellShake 0.6s ease-in-out;
-        }
-        
-        .notification-badge-pulse {
-          animation: pulse 2s infinite;
         }
         
         .notification-dropdown {
@@ -110,25 +105,20 @@ export function NotificationCenter() {
         {/* Bell Button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`relative p-2 rounded-lg hover:bg-slate-100 transition-colors ${
+          className={`relative p-2 rounded-lg hover:bg-slate-100 transition-colors overflow-visible ${
             criticalCount > 0 ? 'text-red-600' : 'text-slate-600'
           }`}
           aria-label="Notifikasi"
         >
           <Bell className={`w-5 h-5 ${unreadCount > 0 ? 'notification-bell-shake' : ''}`} />
           
-          {/* Badge */}
-          {unreadCount > 0 && (
-            <span 
-              className={`absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center px-1 text-[10px] font-bold text-white rounded-full ${
-                criticalCount > 0 
-                  ? 'bg-red-500 notification-badge-pulse' 
-                  : 'bg-amber-500'
-              }`}
-            >
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
+          {/* Notification Badge */}
+          <NotificationBadge 
+            count={unreadCount} 
+            variant="danger"
+            size="md"
+            pulse={true}
+          />
         </button>
 
         {/* Dropdown - Positioned to the left of the bell icon */}
@@ -191,15 +181,25 @@ export function NotificationCenter() {
                     >
                       <div className="flex items-start gap-3">
                         {/* Icon */}
-                        <div className={`p-2 rounded-lg flex-shrink-0 ${
-                          notification.severity === 'critical' 
-                            ? 'bg-red-100' 
-                            : 'bg-amber-100'
-                        }`}>
-                          {notification.severity === 'critical' ? (
-                            <AlertTriangle className="w-4 h-4 text-red-600" />
+                        <div className="flex-shrink-0">
+                          {notification.productImage ? (
+                            <img 
+                              src={notification.productImage} 
+                              alt={notification.productName}
+                              className="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-200"
+                            />
                           ) : (
-                            <Package className="w-4 h-4 text-amber-600" />
+                            <div className={`p-2 rounded-lg flex-shrink-0 ${
+                              notification.severity === 'critical' 
+                                ? 'bg-red-100' 
+                                : 'bg-amber-100'
+                            }`}>
+                              {notification.severity === 'critical' ? (
+                                <AlertTriangle className="w-4 h-4 text-red-600" />
+                              ) : (
+                                <Package className="w-4 h-4 text-amber-600" />
+                              )}
+                            </div>
                           )}
                         </div>
                         
@@ -213,9 +213,6 @@ export function NotificationCenter() {
                             }`}>
                               {notification.severity === 'critical' ? 'Kritis' : 'Rendah'}
                             </span>
-                            {!notification.isRead && (
-                              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                            )}
                           </div>
                           <p className="text-sm font-medium text-slate-900 mt-1 break-words">
                             {notification.productName}
@@ -256,3 +253,5 @@ export function NotificationCenter() {
     </>
   );
 }
+
+export default NotificationCenter;

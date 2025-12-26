@@ -119,4 +119,5 @@ export interface StockNotification {
   severity: 'warning' | 'critical';
   createdAt: string;
   isRead: boolean;
+  productImage?: string;
 }

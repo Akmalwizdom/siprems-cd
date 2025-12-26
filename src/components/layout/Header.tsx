@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 
-import { NotificationCenter } from './NotificationCenter';
+import { NotificationCenter } from '../../features/notifications';
 
 interface HeaderProps {
   onOpenMobileSidebar: () => void;

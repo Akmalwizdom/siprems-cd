@@ -86,6 +86,7 @@ export function useStockNotification() {
                             severity,
                             createdAt: new Date().toISOString(),
                             isRead: false,
+                            productImage: product.image || product.imageUrl,
                         };
                         newNotifications.unshift(notification);
                         newLastChecked[product.id] = new Date().toISOString();
