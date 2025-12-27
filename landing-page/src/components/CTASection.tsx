@@ -24,8 +24,8 @@ const CTASection = () => {
               Siap Mengoptimalkan Stok Anda?
             </h2>
             <p className="text-lg text-primary-foreground/80 max-w-2xl mx-auto mb-10">
-              Mulai gratis selama 14 hari. Tidak perlu kartu kredit. 
-              Batalkan kapan saja.
+              Mulai kelola stok dengan lebih cerdas menggunakan teknologi AI. 
+              Daftar sekarang dan rasakan kemudahannya.
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -35,7 +35,7 @@ const CTASection = () => {
                 asChild
               >
                 <a href="http://localhost:3000/register">
-                  Coba Gratis Sekarang
+                  Mulai Sekarang
                   <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </a>
               </Button>
@@ -43,8 +43,11 @@ const CTASection = () => {
                 size="xl" 
                 variant="ghost" 
                 className="text-primary-foreground hover:bg-primary-foreground/10 rounded-full"
+                asChild
               >
-                Hubungi Sales
+                <a href="http://localhost:3000/login">
+                  Sudah Punya Akun? Login
+                </a>
               </Button>
             </div>
           </div>

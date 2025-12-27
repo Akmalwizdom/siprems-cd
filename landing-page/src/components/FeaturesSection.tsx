@@ -1,36 +1,36 @@
 import { motion } from "framer-motion";
-import { Calendar, Link2, Bot, Package, BarChart3, Bell } from "lucide-react";
+import { Calendar, BarChart3, Bot, Package, ShoppingCart, Bell } from "lucide-react";
 
 const features = [
+  {
+    icon: BarChart3,
+    title: "Dashboard Analytics",
+    description: "Visualisasi lengkap dengan chart interaktif untuk memantau pendapatan, transaksi, dan kategori terlaris.",
+  },
+  {
+    icon: Bot,
+    title: "AI Chatbot Cerdas",
+    description: "Asisten AI yang siap menjawab pertanyaan stok, memberikan rekomendasi restock, dan analisis penjualan.",
+  },
   {
     icon: Calendar,
     title: "Prediksi Musiman",
     description: "Analisis pola musiman, hari libur nasional, dan event khusus untuk prediksi yang lebih akurat.",
   },
   {
-    icon: Link2,
-    title: "Integrasi POS",
-    description: "Hubungkan dengan sistem POS Anda untuk sinkronisasi data penjualan secara real-time.",
-  },
-  {
-    icon: Bot,
-    title: "AI Assistant",
-    description: "Asisten cerdas yang memberikan insight dan rekomendasi berdasarkan analisis data.",
-  },
-  {
     icon: Package,
-    title: "Auto Restock",
-    description: "Rekomendasi restock otomatis berdasarkan prediksi permintaan dan lead time supplier.",
+    title: "Manajemen Produk",
+    description: "Kelola inventaris dengan mudah - tambah produk, atur kategori, dan pantau stok secara real-time.",
   },
   {
-    icon: BarChart3,
-    title: "Dashboard Analytics",
-    description: "Visualisasi data lengkap dengan chart interaktif untuk memahami tren bisnis Anda.",
+    icon: ShoppingCart,
+    title: "Transaksi POS",
+    description: "Sistem kasir modern dengan pencarian cepat, multi-item, dan berbagai metode pembayaran.",
   },
   {
     icon: Bell,
-    title: "Smart Alerts",
-    description: "Notifikasi pintar untuk stok kritis, anomali penjualan, dan peluang bisnis.",
+    title: "Notifikasi Stok",
+    description: "Peringatan otomatis untuk stok rendah dan kritis agar bisnis Anda tetap berjalan lancar.",
   },
 ];
 
@@ -48,7 +48,7 @@ const FeaturesSection = () => {
             Fitur Unggulan
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Teknologi AI canggih yang dirancang khusus untuk kebutuhan bisnis retail Indonesia
+            Solusi lengkap untuk manajemen stok dan prediksi penjualan bisnis retail Indonesia
           </p>
         </motion.div>
 

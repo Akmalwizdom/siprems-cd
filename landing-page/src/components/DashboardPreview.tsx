@@ -1,60 +1,67 @@
 import { motion } from "framer-motion";
-import { CheckCircle, TrendingUp, AlertTriangle, MessageSquare, ShoppingCart, Package } from "lucide-react";
-import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { TrendingUp, ShoppingBag, Package, MessageSquare, Send } from "lucide-react";
+import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
 
-// Dummy chart data
-const chartData = [
-  { name: "1 Jan", historis: 120, prediksi: null },
-  { name: "5 Jan", historis: 150, prediksi: null },
-  { name: "10 Jan", historis: 180, prediksi: null },
-  { name: "15 Jan", historis: 220, prediksi: null },
-  { name: "20 Jan", historis: 200, prediksi: null },
-  { name: "25 Jan", historis: 280, prediksi: null },
-  { name: "30 Jan", historis: 320, prediksi: 320 },
-  { name: "5 Feb", historis: null, prediksi: 380 },
-  { name: "10 Feb", historis: null, prediksi: 450 },
-  { name: "15 Feb", historis: null, prediksi: 520 },
-  { name: "20 Feb", historis: null, prediksi: 580 },
-  { name: "25 Feb", historis: null, prediksi: 650 },
+// Data penjualan untuk chart
+const salesData = [
+  { name: "Sen", sales: 2500000 },
+  { name: "Sel", sales: 3200000 },
+  { name: "Rab", sales: 2800000 },
+  { name: "Kam", sales: 4100000 },
+  { name: "Jum", sales: 3800000 },
+  { name: "Sab", sales: 5200000 },
+  { name: "Min", sales: 4500000 },
+];
+
+// Data kategori
+const categoryData = [
+  { category: "Sembako", value: 45, color: "#6366F1" },
+  { category: "Minuman", value: 25, color: "#10B981" },
+  { category: "Snack", value: 20, color: "#F59E0B" },
+  { category: "Lainnya", value: 10, color: "#EC4899" },
 ];
 
 const statsCards = [
-  { icon: CheckCircle, label: "Akurasi Model", value: "96% Akurasi", color: "text-success", bg: "bg-success-muted" },
-  { icon: TrendingUp, label: "Tren Pertumbuhan", value: "+15% vs Bulan Lalu", color: "text-primary", bg: "bg-accent" },
-  { icon: AlertTriangle, label: "Peringatan Stok", value: "3 Item Kritis", color: "text-destructive", bg: "bg-destructive-muted" },
-];
-
-const restockItems = [
   { 
-    name: "Sirup Marjan", 
-    category: "Minuman", 
-    urgency: "High",
-    currentStock: 50, 
-    predictedDemand: 200, 
-    suggestion: "+150" 
+    icon: TrendingUp, 
+    label: "Total Pendapatan", 
+    value: "Rp 24.5jt", 
+    change: "+12%",
+    color: "text-emerald-600", 
+    bg: "bg-emerald-50",
+    iconBg: "bg-emerald-500"
   },
   { 
-    name: "Beras Premium 5kg", 
-    category: "Sembako", 
-    urgency: "High",
-    currentStock: 30, 
-    predictedDemand: 150, 
-    suggestion: "+120" 
+    icon: ShoppingBag, 
+    label: "Total Transaksi", 
+    value: "156", 
+    change: "+8%",
+    color: "text-indigo-600", 
+    bg: "bg-indigo-50",
+    iconBg: "bg-indigo-500"
   },
   { 
-    name: "Minyak Goreng 2L", 
-    category: "Sembako", 
-    urgency: "Medium",
-    currentStock: 80, 
-    predictedDemand: 130, 
-    suggestion: "+50" 
+    icon: Package, 
+    label: "Barang Terjual", 
+    value: "892", 
+    change: "+15%",
+    color: "text-amber-600", 
+    bg: "bg-amber-50",
+    iconBg: "bg-amber-500"
   },
 ];
 
 interface DashboardPreviewProps {
   compact?: boolean;
 }
+
+const formatCurrency = (value: number) => {
+  if (value >= 1000000) {
+    return `Rp ${(value / 1000000).toFixed(1)}jt`;
+  }
+  return `Rp ${(value / 1000).toFixed(0)}rb`;
+};
 
 const DashboardPreview = ({ compact = false }: DashboardPreviewProps) => {
   return (
@@ -68,57 +75,53 @@ const DashboardPreview = ({ compact = false }: DashboardPreviewProps) => {
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
             viewport={{ once: true }}
-            className={`flex items-center gap-3 rounded-xl ${stat.bg} p-4`}
+            className={`flex items-center gap-3 rounded-xl bg-card border border-border p-4`}
           >
-            <stat.icon className={`h-5 w-5 ${stat.color}`} />
-            <div>
+            <div className={`p-2.5 rounded-lg ${stat.iconBg}`}>
+              <stat.icon className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
               <p className={`text-xs text-muted-foreground ${compact ? "hidden sm:block" : ""}`}>{stat.label}</p>
-              <p className={`font-semibold text-foreground ${compact ? "text-xs" : "text-sm"}`}>{stat.value}</p>
+              <div className="flex items-center gap-2">
+                <p className={`font-bold text-foreground ${compact ? "text-sm" : "text-lg"}`}>{stat.value}</p>
+                <span className="text-xs text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">{stat.change}</span>
+              </div>
             </div>
           </motion.div>
         ))}
       </div>
 
       <div className={`grid gap-6 ${compact ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-3"}`}>
-        {/* Main Chart */}
+        {/* Main Chart - Performa Penjualan */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
           className={`rounded-xl border border-border bg-card p-4 ${compact ? "" : "lg:col-span-2"}`}
         >
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4">
             <h3 className={`font-semibold text-foreground ${compact ? "text-sm" : "text-base"}`}>
-              Prediksi Penjualan
+              Performa Penjualan
             </h3>
-            <div className="flex items-center gap-4 text-xs">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-primary" />
-                Data Historis
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full border-2 border-primary border-dashed" />
-                Prediksi AI
-              </span>
-            </div>
+            <p className="text-xs text-muted-foreground">Pantau tren pendapatan Anda</p>
           </div>
           
-          <ResponsiveContainer width="100%" height={compact ? 150 : 250}>
-            <AreaChart data={chartData}>
+          <ResponsiveContainer width="100%" height={compact ? 150 : 220}>
+            <AreaChart data={salesData}>
               <defs>
-                <linearGradient id="colorHistoris" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorPrediksi" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
                   <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+              <YAxis 
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} 
+                tickFormatter={(value) => formatCurrency(value)}
+              />
               <Tooltip 
+                formatter={(value: number) => [formatCurrency(value), 'Penjualan']}
                 contentStyle={{ 
                   backgroundColor: "hsl(var(--card))", 
                   border: "1px solid hsl(var(--border))",
@@ -128,24 +131,16 @@ const DashboardPreview = ({ compact = false }: DashboardPreviewProps) => {
               />
               <Area
                 type="monotone"
-                dataKey="historis"
+                dataKey="sales"
                 stroke="hsl(var(--primary))"
                 strokeWidth={2}
-                fill="url(#colorHistoris)"
-              />
-              <Area
-                type="monotone"
-                dataKey="prediksi"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                fill="url(#colorPrediksi)"
+                fill="url(#colorSales)"
               />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>
 
-        {/* Restock Panel */}
+        {/* Kategori Teratas */}
         {!compact && (
           <motion.div
             initial={{ opacity: 0, x: 20 }}
@@ -153,32 +148,44 @@ const DashboardPreview = ({ compact = false }: DashboardPreviewProps) => {
             viewport={{ once: true }}
             className="rounded-xl border border-border bg-card p-4"
           >
-            <h3 className="mb-4 font-semibold text-foreground">Rekomendasi Restock</h3>
-            <div className="space-y-3">
-              {restockItems.map((item, index) => (
-                <div key={index} className="rounded-lg border border-border bg-background p-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-foreground">{item.name}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          item.urgency === "High" 
-                            ? "bg-destructive-muted text-destructive" 
-                            : "bg-warning-muted text-warning"
-                        }`}>
-                          {item.urgency}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{item.category}</p>
-                    </div>
-                    <span className="text-lg font-bold text-primary">{item.suggestion}</span>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Stok: {item.currentStock} → Prediksi: {item.predictedDemand}</span>
-                    <Button variant="ghost" size="sm" className="h-7 px-2">
-                      <ShoppingCart className="h-3 w-3" />
-                    </Button>
-                  </div>
+            <div className="mb-4">
+              <h3 className="font-semibold text-foreground">Kategori Teratas</h3>
+              <p className="text-xs text-muted-foreground">Performa terbaik</p>
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie
+                  data={categoryData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={45}
+                  outerRadius={70}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {categoryData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value: number) => [`${value}%`, '']}
+                  contentStyle={{ 
+                    backgroundColor: "hsl(var(--card))", 
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    fontSize: "12px"
+                  }} 
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap justify-center gap-3 mt-2">
+              {categoryData.map((cat) => (
+                <div key={cat.category} className="flex items-center gap-1.5">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: cat.color }}
+                  />
+                  <span className="text-xs text-muted-foreground">{cat.category}</span>
                 </div>
               ))}
             </div>
@@ -186,7 +193,7 @@ const DashboardPreview = ({ compact = false }: DashboardPreviewProps) => {
         )}
       </div>
 
-      {/* Chatbot Widget */}
+      {/* AI Chatbot Widget */}
       {!compact && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -201,15 +208,23 @@ const DashboardPreview = ({ compact = false }: DashboardPreviewProps) => {
             <div className="flex-1">
               <p className="text-sm font-medium text-foreground">AI Assistant</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                "Analisis selesai. Permintaan <span className="font-semibold text-foreground">Sirup Marjan</span> diprediksi naik <span className="font-semibold text-primary">200%</span> menjelang Lebaran. Disarankan restock <span className="font-semibold text-primary">+500 unit</span> sekarang."
+                "Berdasarkan analisis, stok <span className="font-semibold text-foreground">Beras Premium 5kg</span> diprediksi 
+                habis dalam <span className="font-semibold text-primary">3 hari</span>. Disarankan restock 
+                <span className="font-semibold text-primary"> +50 unit</span> segera."
               </p>
-              <div className="mt-3 flex gap-2">
-                <Button size="sm" variant="default" className="h-8">
+              <div className="mt-3 flex items-center gap-2">
+                <div className="flex-1 relative">
+                  <input 
+                    type="text" 
+                    placeholder="Tanya AI tentang stok..." 
+                    className="w-full h-8 px-3 pr-8 text-xs rounded-lg border border-border bg-background"
+                    disabled
+                  />
+                  <Send className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
+                <Button size="sm" variant="default" className="h-8 text-xs">
                   <Package className="mr-1 h-3 w-3" />
                   Isi Stok
-                </Button>
-                <Button size="sm" variant="outline" className="h-8">
-                  Lihat Detail
                 </Button>
               </div>
             </div>

@@ -1,26 +1,26 @@
 import { motion } from "framer-motion";
-import { TrendingDown, Clock, DollarSign, AlertCircle } from "lucide-react";
+import { TrendingDown, Clock, TrendingUp, AlertCircle } from "lucide-react";
 
 const benefits = [
   {
     icon: TrendingDown,
     title: "Kurangi Overstock 40%",
-    description: "Hindari pembelian berlebih dengan prediksi yang akurat berdasarkan data historis dan tren musiman.",
+    description: "Hindari pembelian berlebih dengan prediksi berbasis AI yang menganalisis tren penjualan dan pola musiman.",
   },
   {
     icon: Clock,
-    title: "Hemat 10 Jam/Minggu",
-    description: "Otomatisasi analisis stok yang biasanya memakan waktu berjam-jam menjadi hanya beberapa klik.",
+    title: "Dashboard Real-time",
+    description: "Pantau pendapatan, transaksi, dan kategori terlaris secara langsung tanpa perlu menunggu laporan manual.",
   },
   {
-    icon: DollarSign,
+    icon: TrendingUp,
     title: "Tingkatkan Profit 25%",
-    description: "Maksimalkan keuntungan dengan stok yang tepat di waktu yang tepat, tanpa kelebihan atau kekurangan.",
+    description: "Maksimalkan keuntungan dengan stok yang tepat di waktu yang tepat berdasarkan rekomendasi AI.",
   },
   {
     icon: AlertCircle,
-    title: "Zero Stockout",
-    description: "Dapatkan peringatan dini sebelum stok habis sehingga pelanggan selalu terlayani dengan baik.",
+    title: "Pantau Stok Kritis",
+    description: "Dapatkan notifikasi otomatis saat stok menipis sehingga bisnis Anda selalu siap melayani pelanggan.",
   },
 ];
 

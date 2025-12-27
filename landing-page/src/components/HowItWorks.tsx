@@ -1,30 +1,30 @@
 import { motion } from "framer-motion";
-import { Upload, Cpu, LineChart, ShoppingCart } from "lucide-react";
+import { UserPlus, Package, ShoppingCart, Sparkles } from "lucide-react";
 
 const steps = [
   {
-    icon: Upload,
+    icon: UserPlus,
     step: "01",
-    title: "Hubungkan Data",
-    description: "Integrasikan sistem POS atau upload data historis penjualan Anda dengan mudah.",
+    title: "Daftar & Setup Toko",
+    description: "Buat akun gratis dan lengkapi profil toko Anda dalam hitungan menit.",
   },
   {
-    icon: Cpu,
+    icon: Package,
     step: "02",
-    title: "AI Menganalisis",
-    description: "Algoritma AI kami memproses data dan mengidentifikasi pola musiman serta tren.",
-  },
-  {
-    icon: LineChart,
-    step: "03",
-    title: "Lihat Prediksi",
-    description: "Dapatkan visualisasi prediksi permintaan untuk 30 hari ke depan dengan akurasi tinggi.",
+    title: "Tambah Produk",
+    description: "Input data produk lengkap dengan kategori, harga, dan stok awal.",
   },
   {
     icon: ShoppingCart,
+    step: "03",
+    title: "Catat Transaksi",
+    description: "Gunakan fitur POS untuk mencatat setiap penjualan secara real-time.",
+  },
+  {
+    icon: Sparkles,
     step: "04",
-    title: "Restock Optimal",
-    description: "Terima rekomendasi restock yang tepat waktu dan sesuai kebutuhan bisnis Anda.",
+    title: "Dapatkan Prediksi AI",
+    description: "AI menganalisis data dan memberikan rekomendasi restock yang akurat.",
   },
 ];
 
