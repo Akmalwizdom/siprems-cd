@@ -4,7 +4,7 @@ import { TrendingDown, Clock, TrendingUp, AlertCircle } from "lucide-react";
 const benefits = [
   {
     icon: TrendingDown,
-    title: "Kurangi Overstock 40%",
+    title: "Minimalisir Overstock",
     description: "Hindari pembelian berlebih dengan prediksi berbasis AI yang menganalisis tren penjualan dan pola musiman.",
   },
   {
@@ -14,7 +14,7 @@ const benefits = [
   },
   {
     icon: TrendingUp,
-    title: "Tingkatkan Profit 25%",
+    title: "Optimalkan Profit",
     description: "Maksimalkan keuntungan dengan stok yang tepat di waktu yang tepat berdasarkan rekomendasi AI.",
   },
   {

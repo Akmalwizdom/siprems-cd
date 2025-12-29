@@ -17,7 +17,7 @@ export function ChatBot({ predictionData = null, onRestockSuccess }: ChatBotProp
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: 'Halo! Saya asisten AI SIPREMS. Ada yang bisa saya bantu?',
+      content: 'Halo! Saya asisten AI Siprems. Ada yang bisa saya bantu?',
     },
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -327,7 +327,7 @@ export function ChatBot({ predictionData = null, onRestockSuccess }: ChatBotProp
                   <button
                     onClick={handleCancelAction}
                     disabled={isConfirming}
-                    className="flex-1 py-2.5 px-3 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors duration-200"
+                    className="flex-1 py-3.5 px-4 rounded-xl border-2 border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors duration-200 font-semibold"
                   >
                     <XCircle className="w-4 h-4 flex-shrink-0" />
                     <span className="text-sm font-medium">Batal</span>
@@ -335,7 +335,7 @@ export function ChatBot({ predictionData = null, onRestockSuccess }: ChatBotProp
                   <button
                     onClick={handleConfirmAction}
                     disabled={isConfirming}
-                    className="flex-1 py-2.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 border border-transparent text-white disabled:opacity-50 flex items-center justify-center gap-2 transition-colors duration-200 shadow-sm"
+                    className="flex-1 py-3.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 border border-transparent text-white disabled:opacity-50 flex items-center justify-center gap-2 transition-colors duration-200 shadow-sm"
                   >
                     {isConfirming ? (
                       <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />

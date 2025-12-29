@@ -76,9 +76,9 @@ const HeroSection = () => {
             className="mt-16 grid grid-cols-3 gap-8"
           >
             {[
-              { value: "96%", label: "Akurasi Prediksi" },
-              { value: "100+", label: "Toko Aktif" },
-              { value: "50K+", label: "Transaksi Diproses" },
+              { value: "Tinggi", label: "Akurasi Prediksi" },
+              { value: "Multi-User", label: "Sistem Terintegrasi" },
+              { value: "Real-time", label: "Pemrosesan Data" },
             ].map((stat, index) => (
               <div key={index} className="text-center">
                 <div className="text-2xl font-bold text-foreground sm:text-3xl md:text-4xl">

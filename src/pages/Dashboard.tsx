@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { TrendingUp, ShoppingBag, Package, AlertCircle, Loader2, Trophy } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, Loader2, Trophy } from 'lucide-react';
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { TimeRange, DashboardMetrics, CategorySales } from '../types';
 import { formatIDR } from '../utils/currency';
@@ -71,13 +71,7 @@ export function Dashboard() {
     return [];
   }, [todaySummary.data]);
 
-  // Critical stock items
-  const criticalStockItems = useMemo(() => {
-    const productsList = Array.isArray(allProducts) ? allProducts : [];
-    return productsList.filter((p: any) => 
-      p.stock < (p.reorder_point || 100) || p.stock < 50
-    );
-  }, [allProducts]);
+
 
   if (isLoading || !metricsData) {
     return (
@@ -564,57 +558,6 @@ export function Dashboard() {
       )}
 
 
-
-      {/* Critical Stock Alert - Info Only */}
-      {criticalStockItems.length > 0 && (
-        <div 
-          className="border rounded-xl p-6"
-          style={{ backgroundColor: 'rgba(251, 191, 36, 0.3)', borderColor: 'rgba(245, 158, 11, 0.5)' }}
-        >
-          <div className="flex items-start gap-4">
-            <div 
-              className="p-3 rounded-lg"
-              style={{ backgroundColor: 'rgba(245, 158, 11, 0.3)' }}
-            >
-              <AlertCircle className="w-6 h-6 text-amber-700" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-amber-900 font-semibold mb-2">Perhatian: Stok Rendah</h3>
-              <p className="text-amber-800 mb-4">
-                {criticalStockItems.length} produk membutuhkan perhatian
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {criticalStockItems.slice(0, 6).map((item) => (
-                  <span
-                    key={item.id}
-                    className="px-3 py-1 rounded-full text-sm font-medium border"
-                    style={{
-                      backgroundColor: item.stock < 50 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(251, 191, 36, 0.2)',
-                      color: item.stock < 50 ? '#991b1b' : '#92400e',
-                      borderColor: item.stock < 50 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.4)'
-                    }}
-                  >
-                    {item.name} ({item.stock} unit)
-                  </span>
-                ))}
-                {criticalStockItems.length > 6 && (
-                  <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-sm">
-                    +{criticalStockItems.length - 6} lainnya
-                  </span>
-                )}
-              </div>
-              <div className="mt-4">
-                <button 
-                  onClick={() => navigate('/products')}
-                  className="text-sm text-amber-700 hover:text-amber-800 hover:underline font-medium"
-                >
-                  Kelola di Halaman Produk →
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
