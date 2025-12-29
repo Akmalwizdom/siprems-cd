@@ -1,221 +1,187 @@
-# 🚀 Tutorial Deployment SIPREMS
+# 🚀 Tutorial Deploy Fullstack SIPREMS ke Railway
 
-Tutorial lengkap untuk hosting aplikasi SIPREMS ke platform gratis.
-
----
-
-## 📋 Overview
-
-| Komponen | Platform | URL Hasil |
-|----------|----------|-----------|
-| Landing Page | Vercel | `siprems-landing.vercel.app` |
-| Frontend | Vercel | `siprems-app.vercel.app` |
-| Backend | Railway | `siprems-backend.up.railway.app` |
-| ML Service | Railway | `siprems-ml.up.railway.app` |
+Tutorial lengkap untuk deploy Frontend, Backend, dan ML Service ke Railway.
 
 ---
 
-## 1️⃣ Deploy Landing Page ke Vercel
+## 📋 Persiapan Sebelum Deploy
 
-### Step 1: Buat Akun Vercel
-1. Buka [vercel.com](https://vercel.com)
-2. Klik **Sign Up** → pilih **Continue with GitHub**
-3. Authorize Vercel untuk akses GitHub
+### 1. Pastikan File Konfigurasi Sudah Ada
 
-### Step 2: Import Project
-1. Di dashboard Vercel, klik **Add New** → **Project**
-2. Pilih repository `siprems-cd`
-3. Pada **Root Directory**, klik **Edit** dan pilih `landing-page`
-4. Framework Preset: **Vite** (otomatis terdeteksi)
+Cek file-file berikut sudah ada di repository:
 
-### Step 3: Configure Build
+| File | Lokasi | Status |
+|------|--------|--------|
+| `railway.json` | `backend-ts/railway.json` | ✅ Sudah dibuat |
+| `railway.json` | `ml-service/railway.json` | ✅ Sudah dibuat |
+| `Dockerfile` | `ml-service/Dockerfile` | ✅ Sudah ada |
+
+### 2. Push Semua Perubahan ke GitHub
+
+```bash
+git add .
+git commit -m "prepare for railway deployment"
+git push origin main
 ```
-Build Command: npm run build
-Output Directory: dist
-Install Command: npm install
-```
-
-### Step 4: Deploy
-Klik **Deploy** dan tunggu hingga selesai (~2 menit).
-
-> ✅ Landing page akan tersedia di: `https://[project-name].vercel.app`
 
 ---
 
-## 2️⃣ Deploy Frontend (Dashboard) ke Vercel
+## 🔧 Step 1: Buat Akun Railway
 
-### Step 1: Create New Project
-1. Di Vercel, klik **Add New** → **Project**
-2. Pilih repository yang sama `siprems-cd`
-3. **Root Directory**: biarkan kosong (root folder)
-
-### Step 2: Configure Build
-```
-Build Command: npm run build
-Output Directory: dist
-Install Command: npm install
-```
-
-### Step 3: Environment Variables
-Klik **Environment Variables** dan tambahkan:
-
-| Key | Value |
-|-----|-------|
-| `VITE_API_URL` | `https://siprems-backend.up.railway.app` |
-| `VITE_FIREBASE_API_KEY` | (dari Firebase Console) |
-| `VITE_FIREBASE_AUTH_DOMAIN` | (dari Firebase Console) |
-| `VITE_FIREBASE_PROJECT_ID` | (dari Firebase Console) |
-| `VITE_FIREBASE_STORAGE_BUCKET` | (dari Firebase Console) |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | (dari Firebase Console) |
-| `VITE_FIREBASE_APP_ID` | (dari Firebase Console) |
-
-### Step 4: Deploy
-Klik **Deploy**.
-
-> ⚠️ **Penting**: Update URL backend setelah deploy Railway!
-
----
-
-## 3️⃣ Deploy Backend ke Railway
-
-### Step 1: Buat Akun Railway
 1. Buka [railway.app](https://railway.app)
-2. Sign up dengan **GitHub** (gratis, tanpa kartu kredit)
-3. Anda mendapat **$5 credit gratis per bulan**
-
-### Step 2: Create New Project
-1. Klik **New Project** → **Deploy from GitHub repo**
-2. Pilih repository `siprems-cd`
-3. Railway akan auto-detect monorepo
-
-### Step 3: Configure Service
-1. Klik service yang muncul → **Settings**
-2. Scroll ke **Source**:
-   - **Root Directory**: `backend-ts`
-3. Scroll ke **Build**:
-   - **Build Command**: `npm install && npm run build`
-4. Scroll ke **Deploy**:
-   - **Start Command**: `npm start`
-
-### Step 4: Environment Variables
-Klik **Variables** dan tambahkan:
-
-| Key | Value |
-|-----|-------|
-| `NODE_ENV` | `production` |
-| `PORT` | `${{PORT}}` (Railway auto-assign) |
-| `DATABASE_URL` | (URL PostgreSQL dari Supabase) |
-| `SUPABASE_URL` | (dari Supabase) |
-| `SUPABASE_ANON_KEY` | (dari Supabase) |
-| `GEMINI_API_KEY` | (dari Google AI Studio) |
-| `ML_SERVICE_URL` | `https://[ml-service-name].up.railway.app` |
-
-### Step 5: Generate Domain
-1. Klik **Settings** → **Networking**
-2. Klik **Generate Domain**
-3. Catat URL (contoh: `siprems-backend.up.railway.app`)
-
-### Step 6: Deploy
-Railway akan auto-deploy setiap push ke GitHub.
+2. Klik **Login** → pilih **GitHub**
+3. Authorize Railway
+4. Anda mendapat **$5 credit gratis per bulan**
 
 ---
 
-## 4️⃣ Deploy ML Service ke Railway
+## 🛠️ Step 2: Deploy Backend
 
-### Step 1: Add New Service
-1. Di project yang sama, klik **+ New** → **GitHub Repo**
-2. Pilih repository `siprems-cd` lagi
+### 2.1 Create Empty Project
+1. Di dashboard, klik **+ New Project**
+2. Pilih **Empty Project**
+3. Beri nama project: `siprems`
 
-### Step 2: Configure Service
-1. **Settings** → **Source**:
-   - **Root Directory**: `ml-service`
-2. Railway akan auto-detect **Dockerfile**
+### 2.2 Add Backend Service
+1. Dalam project, klik **+ New**
+2. Pilih **GitHub Repo**
+3. Pilih repository `siprems` atau `siprems-cd`
+4. **PENTING**: Sebelum deploy, klik link **"Add Root Directory"**
+5. Isi: `backend-ts`
+6. Klik **Deploy**
 
-### Step 3: Environment Variables
-| Key | Value |
-|-----|-------|
-| `FLASK_ENV` | `production` |
-| `PORT` | `${{PORT}}` |
+### 2.3 Configure Build (jika tidak auto-detect)
+Pergi ke **Settings** → **Build**:
+- Build Command: `npm install && npm run build`
+- Watch Paths: `/backend-ts/**`
 
-### Step 4: Generate Domain
+### 2.4 Configure Start Command
+Pergi ke **Settings** → **Deploy**:
+- Start Command: `npm start`
+
+### 2.5 Add Environment Variables
+Pergi ke tab **Variables**, tambahkan:
+
+```env
+NODE_ENV=production
+PORT=3000
+DATABASE_URL=postgresql://postgres.hnddcambdbftrehbhetb:YA10eYEACRPZuOvh@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres
+SUPABASE_URL=https://hnddcambdbftrehbhetb.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuZGRjYW1iZGJmdHJlaGJoZXRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5MzQ0MTMsImV4cCI6MjA3OTUxMDQxM30.fVU8M1CFosUERkFSQHmXjnhFiuYwQ0VgkKxmqRuXXkM
+GEMINI_API_KEY=AIzaSyDj1FdY3Yk6RqcNHt8JLd3xseqYx_0fZh0
+ML_SERVICE_URL=http://${{ml-service.RAILWAY_PRIVATE_DOMAIN}}:8001
+```
+
+### 2.6 Generate Public URL
+1. Pergi ke **Settings** → **Networking**
+2. Klik **Generate Domain**
+3. Catat URL (contoh: `siprems-backend-xxx.up.railway.app`)
+
+---
+
+## 🐍 Step 3: Deploy ML Service
+
+### 3.1 Add ML Service
+1. Dalam project yang sama, klik **+ New**
+2. Pilih **GitHub Repo**
+3. Pilih repository yang sama
+4. **Klik "Add Root Directory"** → isi: `ml-service`
+5. Railway akan auto-detect Dockerfile
+
+### 3.2 Rename Service
+1. Klik nama service
+2. Rename menjadi: `ml-service`
+
+### 3.3 Add Environment Variables
+```env
+FLASK_ENV=production
+PORT=8001
+```
+
+### 3.4 Generate Domain (Optional)
+Jika perlu akses publik, generate domain di Networking.
+
+---
+
+## 💻 Step 4: Deploy Frontend
+
+### 4.1 Add Frontend Service
+1. Klik **+ New** → **GitHub Repo**
+2. Pilih repository yang sama
+3. **JANGAN** set root directory (biarkan kosong untuk deploy root)
+4. Railway akan detect Dockerfile di root
+
+### 4.2 Add Environment Variables
+```env
+VITE_API_URL=https://[backend-domain].up.railway.app
+VITE_FIREBASE_API_KEY=AIzaSyDPZzEoxBztDbrNBedFsS0_AvyITUUajSU
+VITE_FIREBASE_AUTH_DOMAIN=siprems-6fa80.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=siprems-6fa80
+VITE_FIREBASE_STORAGE_BUCKET=siprems-6fa80.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=428482190168
+VITE_FIREBASE_APP_ID=1:428482190168:web:ac3820b03ea2cbb8a0632d
+```
+
+### 4.3 Generate Domain
 Klik **Settings** → **Networking** → **Generate Domain**
 
-### Step 5: Update Backend
-Kembali ke backend service, update variable:
-```
-ML_SERVICE_URL = https://[ml-service-domain].up.railway.app
-```
-
 ---
 
-## 5️⃣ Update API URLs
+## 🔗 Step 5: Update Connections
 
-Setelah semua service deployed:
-
-### Di Vercel (Frontend):
-Update environment variable:
-```
-VITE_API_URL = https://[backend-domain].up.railway.app
+### 5.1 Update Backend → ML Service
+Di Backend service, update variable:
+```env
+ML_SERVICE_URL=http://ml-service.railway.internal:8001
 ```
 
-### Di Landing Page:
-Update file `landing-page/src/components/HeroSection.tsx`:
-```tsx
-<a href="https://[frontend-domain].vercel.app/login">
-```
+### 5.2 Update Frontend → Backend  
+Di Frontend service, update variable dengan URL backend yang di-generate.
 
-Commit dan push untuk auto-redeploy.
-
----
-
-## 6️⃣ Database Setup (Supabase)
-
-### Step 1: Buat Project Supabase
-1. Buka [supabase.com](https://supabase.com)
-2. Create new project (gratis)
-3. Catat **Database URL** (Settings → Database → Connection string → URI)
-
-### Step 2: Run Migrations
-Di SQL Editor Supabase, jalankan migrations dari `backend-ts/migrations/`
-
-### Step 3: Update Backend
-Update `DATABASE_URL` di Railway dengan URL dari Supabase.
+### 5.3 Update Firebase Authorized Domains
+1. Buka [Firebase Console](https://console.firebase.google.com)
+2. Pergi ke **Authentication** → **Settings** → **Authorized domains**
+3. Tambahkan semua domain Railway:
+   - `siprems-frontend-xxx.up.railway.app`
+   - `siprems-backend-xxx.up.railway.app`
 
 ---
 
 ## ✅ Checklist Final
 
-- [ ] Landing Page deployed ke Vercel
-- [ ] Frontend deployed ke Vercel  
-- [ ] Backend deployed ke Railway
-- [ ] ML Service deployed ke Railway
-- [ ] Database setup di Supabase
-- [ ] Environment variables configured
-- [ ] API URLs updated di semua service
-- [ ] Firebase authorized domains updated
+- [ ] Backend deployed dan berjalan
+- [ ] ML Service deployed dan berjalan
+- [ ] Frontend deployed dan berjalan
+- [ ] Backend bisa connect ke ML Service (internal network)
+- [ ] Frontend bisa connect ke Backend (public URL)
+- [ ] Firebase domains authorized
+- [ ] Database migrations sudah dijalankan di Supabase
 
 ---
 
 ## 🔧 Troubleshooting
 
-### Railway Credit Habis
-- Upgrade ke Hobby plan ($5/bulan) atau
-- Buat akun baru untuk reset credit
+### Error: Could not resolve module
+Pastikan Root Directory sudah diset dengan benar sebelum deploy.
+
+### Backend tidak bisa connect ke ML Service
+Gunakan internal domain: `http://ml-service.railway.internal:PORT`
 
 ### CORS Error
-Tambahkan domain Vercel ke allowed origins di backend `cors()` config.
+Tambahkan domain frontend ke backend CORS config.
 
-### Firebase Auth Error
-Tambahkan domain Vercel ke **Authorized Domains** di:
-Firebase Console → Authentication → Settings → Authorized Domains
+### Build timeout
+Free tier memiliki batas build time. Coba upgrade atau optimasi build.
 
 ---
 
-## 📱 URL Akhir
+## 📊 Estimasi Biaya
 
-| Service | URL |
-|---------|-----|
-| Landing Page | `https://siprems-landing.vercel.app` |
-| Dashboard | `https://siprems-app.vercel.app` |
-| Backend API | `https://siprems-backend.up.railway.app` |
-| ML Service | `https://siprems-ml.up.railway.app` |
+| Service | Usage/bulan | Cost |
+|---------|-------------|------|
+| Frontend | ~100MB RAM | ~$0.50 |
+| Backend | ~256MB RAM | ~$1.50 |
+| ML Service | ~512MB RAM | ~$2.50 |
+| **Total** | | ~$4.50/bulan |
+
+**Kesimpulan**: Dengan free tier $5/bulan, cukup untuk menjalankan semua service dengan usage rendah.
