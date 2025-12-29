@@ -3,7 +3,7 @@ import { Bot, X, Send, Loader2, Sparkles, User, Check, XCircle } from 'lucide-re
 import { geminiService, type ChatMessage, type CommandAction } from '../../services/gemini';
 import { PredictionResponse, apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../ui/Toast';
+import { useToast } from '../ui/toast';
 
 interface ChatBotProps {
   predictionData?: PredictionResponse | null;

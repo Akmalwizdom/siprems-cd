@@ -7,7 +7,7 @@ import { API_BASE_URL } from '../config';
 import { AdminOnly } from '../components/auth/RoleGuard';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../components/ui/Toast';
+import { useToast } from '../components/ui/toast';
 import { useProducts, useCategoryNames } from '../hooks';
 import { useCategories, useCategoryMutations, Category } from '../hooks/useCategories';
 import { useQueryClient } from '@tanstack/react-query';

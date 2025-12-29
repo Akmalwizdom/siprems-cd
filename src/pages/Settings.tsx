@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, Camera, Lock, LogOut, Loader2, Check, X, Mail, Building, Phone, MapPin, Save, Brain, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useAuth, getFirebaseErrorMessage } from '../context/AuthContext';
-import { useToast } from '../components/ui/Toast';
+import { useToast } from '../components/ui/toast';
 import { AuthError } from 'firebase/auth';
 import { AdminOnly } from '../components/auth/RoleGuard';
 import { API_BASE_URL } from '../config';

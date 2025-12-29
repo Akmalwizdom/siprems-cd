@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router } from './utils/routes';
 import { StoreProvider } from './context/StoreContext';
 import { AuthProvider } from './context/AuthContext';
-import { ToastProvider } from './components/ui/Toast';
+import { ToastProvider } from './components/ui/toast';
 
 // Configure QueryClient with optimal caching defaults
 const queryClient = new QueryClient({

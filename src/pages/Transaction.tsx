@@ -5,7 +5,7 @@ import { formatIDR } from '../utils/currency';
 import { Button } from '../components/ui/Button';
 import { API_BASE_URL } from '../config';
 import { exportToExcel, exportToPDF, printReceipt, type TransactionExport, type TransactionDetail, type StoreProfile } from '../utils/export';
-import { useToast } from '../components/ui/Toast';
+import { useToast } from '../components/ui/toast';
 import { useAuth } from '../context/AuthContext';
 import { AdminOnly } from '../components/auth/RoleGuard';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
