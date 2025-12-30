@@ -10,8 +10,8 @@ import { Button } from '../components/ui/button';
 import { API_BASE_URL } from '../config';
 import { AdminOnly } from '../components/auth/RoleGuard';
 import { useToast } from '../components/ui/toast';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { Alert, AlertDescription } from '../components/ui/Alert';
+import { ConfirmDialog } from '../components/ui/confirmdialog';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { useAuth } from '../context/AuthContext';
 
 type ViewMode = 'month' | 'week' | 'day';

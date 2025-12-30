@@ -6,7 +6,7 @@ import { Bell, Package, AlertTriangle, CheckCheck, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useStockNotification } from '../../hooks/useStockNotification';
 import { StockNotification } from '../../types';
-import { NotificationBadge } from '../../components/ui/NotificationBadge';
+import { NotificationBadge } from '../../components/ui/notificationbadge';
 
 function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString);

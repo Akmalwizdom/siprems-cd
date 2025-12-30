@@ -5,7 +5,7 @@ import { formatIDR } from '../utils/currency';
 import { Button } from '../components/ui/button';
 import { API_BASE_URL } from '../config';
 import { AdminOnly } from '../components/auth/RoleGuard';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { ConfirmDialog } from '../components/ui/confirmdialog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/toast';
 import { useProducts, useCategoryNames } from '../hooks';

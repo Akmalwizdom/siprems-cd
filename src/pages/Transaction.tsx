@@ -8,7 +8,7 @@ import { exportToExcel, exportToPDF, printReceipt, type TransactionExport, type 
 import { useToast } from '../components/ui/toast';
 import { useAuth } from '../context/AuthContext';
 import { AdminOnly } from '../components/auth/RoleGuard';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { ConfirmDialog } from '../components/ui/confirmdialog';
 import { MobileCartSheet, FloatingCartButton } from '../components/transaction';
 
 interface TransactionItem {

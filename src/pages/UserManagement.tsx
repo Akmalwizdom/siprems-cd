@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { useToast } from '../components/ui/toast';
 import { API_BASE_URL } from '../config';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { ConfirmDialog } from '../components/ui/confirmdialog';
 
 interface User {
   id: string;

@@ -7,13 +7,13 @@ import { apiService, type PredictionResponse, type ModelAccuracyResponse } from 
 import { geminiService, type ChatMessage, type CommandAction } from '../services/gemini';
 import { PredictionData, RestockRecommendation } from '../types';
 import { Button } from '../components/ui/button';
-import { Alert, AlertTitle, AlertDescription } from '../components/ui/Alert';
+import { Alert, AlertTitle, AlertDescription } from '../components/ui/alert';
 import { RestockModal } from '../components/prediction/RestockModal';
 import { ChatBot } from '../components/prediction/ChatBot';
 import { AdminOnly } from '../components/auth/RoleGuard';
 import Loader from '../components/common/Loader';
 import { PredictionChartSVG } from '../components/prediction/PredictionChartSVG';
-import { ScrollArea } from '../components/ui/ScrollArea';
+import { ScrollArea } from '../components/ui/scrollarea';
 import { usePrediction } from '../hooks';
 
 
