@@ -57,6 +57,7 @@ dist/
 # Logs
 logs/
 *.log
+logs.*.json
 
 # Temporary files
 *.tmp
