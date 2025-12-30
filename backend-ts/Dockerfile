@@ -2,15 +2,15 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files from backend-ts folder (context is repo root)
-COPY backend-ts/package*.json ./
-COPY backend-ts/tsconfig.json ./
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
 
 # Install dependencies
 RUN npm install
 
-# Copy source code from backend-ts folder
-COPY backend-ts/src ./src
+# Copy source code
+COPY src ./src
 
 # Build TypeScript
 RUN npm run build
@@ -20,3 +20,4 @@ EXPOSE 8000
 
 # Start the application
 CMD ["npm", "start"]
+
