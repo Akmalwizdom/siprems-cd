@@ -36,6 +36,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "npx serve dist -l 3000"
   }
 }
