@@ -1,4 +1,5 @@
 [build]
-builder = "dockerfile"
-dockerfilePath = "Dockerfile"
-target = "production"
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npx serve dist -s -l $PORT"
