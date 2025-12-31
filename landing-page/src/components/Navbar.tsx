@@ -71,10 +71,10 @@ const Navbar = () => {
           {/* Auth Buttons */}
           <div className="hidden items-center gap-3 md:flex">
             <Button variant="ghost" size="sm" asChild>
-              <a href="http://localhost:3000/login">Login</a>
+              <a href={`${process.env.NEXT_PUBLIC_APP_URL}/login`}>Login</a>
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <a href="http://localhost:3000/register">Register</a>
+              <a href={`${process.env.NEXT_PUBLIC_APP_URL}/register`}>Register</a>
             </Button>
           </div>
 
@@ -117,10 +117,10 @@ const Navbar = () => {
                 </a>
                 <div className="flex gap-2 pt-2">
                   <Button variant="ghost" size="sm" className="flex-1" asChild>
-                    <a href="http://localhost:3000/login">Login</a>
+                    <a href={`${process.env.NEXT_PUBLIC_APP_URL}/login`}>Login</a>
                   </Button>
                   <Button variant="outline" size="sm" className="flex-1" asChild>
-                    <a href="http://localhost:3000/register">Register</a>
+                    <a href={`${process.env.NEXT_PUBLIC_APP_URL}/register`}>Register</a>
                   </Button>
                 </div>
               </div>

@@ -34,7 +34,7 @@ const CTASection = () => {
                 className="bg-card text-foreground hover:bg-card/90 rounded-full shadow-lg group"
                 asChild
               >
-                <a href="http://localhost:3000/register">
+                <a href={`${process.env.NEXT_PUBLIC_APP_URL}/register`}>
                   Mulai Sekarang
                   <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </a>
@@ -45,7 +45,7 @@ const CTASection = () => {
                 className="text-primary-foreground hover:bg-primary-foreground/10 rounded-full"
                 asChild
               >
-                <a href="http://localhost:3000/login">
+                <a href={`${process.env.NEXT_PUBLIC_APP_URL}/login`}>
                   Sudah Punya Akun? Login
                 </a>
               </Button>

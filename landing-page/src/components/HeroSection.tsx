@@ -58,7 +58,7 @@ const HeroSection = () => {
             className="flex flex-col items-center justify-center gap-4 sm:flex-row"
           >
             <Button variant="hero" size="xl" className="group" asChild>
-              <a href="http://localhost:3000/login">
+              <a href={`${process.env.NEXT_PUBLIC_APP_URL}/login`}>
                 Mulai Sekarang
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </a>
