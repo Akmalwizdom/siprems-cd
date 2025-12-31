@@ -151,7 +151,7 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
         const thirtyDaysAgo = new Date(nowWib.getTime() - (30 * 24 * 60 * 60 * 1000));
         const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
 
-        console.log(`[Forecast] Fetching history from ${thirtyDaysAgoStr} to ${todayWib} (WIB)`);
+        // Reduced logging to prevent Railway rate limit issues
 
         const { data: historicalData, error: historyError } = await supabase
             .from('daily_sales_summary')
@@ -170,7 +170,7 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
             historicalData.forEach(row => {
                 dailyHistory[row.ds] = row.y || 0;
             });
-            console.log(`[Forecast] Loaded ${historicalData.length} days of historical data`);
+            // Historical data loaded silently
         }
 
         // Generate full 30-day range to ensure continuity
@@ -234,8 +234,7 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
 
             const forecastDays = periods || 30;
 
-            console.log(`[Forecast] Using ProductForecastService for recommendations`);
-            console.log(`[Forecast] Total predicted revenue: ${totalPredictedRevenue.toFixed(0)}, days: ${forecastDays}`);
+            // Processing predictions silently to reduce logging
 
             // Get enhanced predictions from ProductForecastService
             const productPredictions = await productForecastService.generateProductPredictions(
@@ -261,9 +260,7 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
                 salesProportion: pred.salesProportion,
             }));
 
-            console.log(`[Forecast] Generated ${recommendations.length} product recommendations`);
-            console.log(`[Forecast] High urgency: ${recommendations.filter(r => r.urgency === 'high').length}`);
-            console.log(`[Forecast] Medium urgency: ${recommendations.filter(r => r.urgency === 'medium').length}`);
+            // Recommendations generated silently
 
         } catch (error) {
             console.error('[Forecast] Error generating recommendations:', error);
@@ -277,17 +274,14 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
             ? predictions[predictions.length - 1]?.ds
             : historicalChartData[historicalChartData.length - 1]?.date;
 
-        console.log(`[Forecast] Chart date range: ${chartStartDate} to ${chartEndDate}`);
-        console.log(`[Forecast] Received ${(events || []).length} events from frontend:`, JSON.stringify(events || [], null, 2));
+        // Process events without verbose logging to prevent rate limit
 
         // Calculate event annotations from events - ONLY for events within chart date range
         const eventAnnotations: { date: string; titles: string[]; types: string[] }[] = (events || [])
             .filter((event: any) => {
                 // Filter events to only those within chart date range
                 const isInRange = event.date >= chartStartDate && event.date <= chartEndDate;
-                if (!isInRange) {
-                    console.log(`[Forecast] Event "${event.title}" on ${event.date} is OUTSIDE chart range`);
-                }
+                // Filter events silently
                 return isInRange;
             })
             .reduce((acc: any[], event: any) => {
@@ -305,7 +299,7 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
                 return acc;
             }, []);
 
-        console.log(`[Forecast] After filtering: ${eventAnnotations.length} event annotations within chart range`);
+        // Event annotations filtered
 
         // Fetch national holidays for the chart date range and merge into eventAnnotations
         try {
@@ -314,7 +308,7 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
                 const startYear = new Date(chartStartDate).getFullYear();
                 const endYear = new Date(chartEndDate).getFullYear();
 
-                console.log(`[Forecast] Fetching holidays for years ${startYear}-${endYear} (chart: ${chartStartDate} to ${chartEndDate})`);
+                // Fetching holidays silently
 
                 // Fetch holidays for all years in the chart range
                 for (let year = startYear; year <= endYear; year++) {
@@ -344,7 +338,7 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
 
                 // Sort annotations by date
                 eventAnnotations.sort((a, b) => a.date.localeCompare(b.date));
-                console.log(`[Forecast] Total event annotations (including holidays): ${eventAnnotations.length}`);
+                // Holidays processed
             }
         } catch (error) {
             console.error('[Forecast] Error fetching holidays for annotations:', error);
@@ -367,7 +361,7 @@ router.post('/:store_id', authenticate, requireAdmin, async (req: AuthenticatedR
             },
         };
 
-        console.log(`[Forecast] Transformed response: ${chartData.length} data points, growth factor: ${appliedFactor.toFixed(2)}`);
+        // Response ready
         res.json(transformedResponse);
     } catch (error: any) {
         console.error('[Forecast] Predict with path param failed:', error);

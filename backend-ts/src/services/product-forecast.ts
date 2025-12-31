@@ -61,8 +61,7 @@ class ProductForecastService {
         const lookbackDate = new Date(nowWib.getTime() - (lookbackDays * 24 * 60 * 60 * 1000));
         const lookbackStr = lookbackDate.toISOString().split('T')[0];
 
-        console.log(`[ProductForecast] Fetching sales from ${lookbackStr} to ${todayStr}`);
-        console.log(`[ProductForecast] Recent period: ${recentCutoffStr} to ${todayStr}`);
+        // Fetching time-weighted sales data
 
         // Fetch all transaction items with their transaction dates
         const { data: transactionItems, error: itemsError } = await supabase
@@ -188,8 +187,7 @@ class ProductForecastService {
             };
         }
 
-        console.log(`[ProductForecast] Processed ${Object.keys(productSales).length} products in ${Object.keys(categorySales).length} categories`);
-        console.log(`[ProductForecast] Total units: raw=${totalRawUnits}, weighted=${totalWeightedUnits.toFixed(0)}`);
+        // Products processed by category
 
         return { productSales, categorySales, totalWeightedUnits, totalRawUnits };
     }
@@ -222,8 +220,7 @@ class ProductForecastService {
         forecastDays: number = 30,
         categoryEvents?: Record<string, number> // Optional: category-specific event impact
     ): Promise<ProductDemandPrediction[]> {
-        console.log(`[ProductForecast] Generating predictions for ${forecastDays} days`);
-        console.log(`[ProductForecast] Total predicted revenue: ${totalPredictedRevenue.toFixed(0)}`);
+        // Generating product predictions
 
         // Get time-weighted sales data
         const { productSales, categorySales, totalWeightedUnits, totalRawUnits } =
@@ -245,8 +242,7 @@ class ProductForecastService {
             ? totalPredictedRevenue / avgProductPrice
             : totalPredictedRevenue;
 
-        console.log(`[ProductForecast] Avg product price: ${avgProductPrice.toFixed(0)}`);
-        console.log(`[ProductForecast] Total predicted units: ${totalPredictedUnits.toFixed(0)}`);
+        // Predictions calculated
 
         const predictions: ProductDemandPrediction[] = [];
 
@@ -350,9 +346,7 @@ class ProductForecastService {
             return b.recommendedRestock - a.recommendedRestock;
         });
 
-        console.log(`[ProductForecast] Generated ${predictions.length} predictions`);
-        console.log(`[ProductForecast] High urgency: ${predictions.filter(p => p.urgency === 'high').length}`);
-        console.log(`[ProductForecast] Medium urgency: ${predictions.filter(p => p.urgency === 'medium').length}`);
+        // Predictions finalized
 
         return predictions;
     }

@@ -15,12 +15,12 @@ class HolidayService {
     private async fetchAllHolidays(): Promise<Record<string, any>> {
         // Check cache validity
         if (this.cache && Date.now() - this.cache.timestamp < this.cacheTTL) {
-            console.log('[Holiday] Returning cached holidays');
+            // Using cached holidays
             return this.cache.data;
         }
 
         try {
-            console.log(`[Holiday] Fetching from: ${HOLIDAY_API_URL}`);
+            // Fetching holidays from API
             const response = await axios.get(HOLIDAY_API_URL, { timeout: 15000 });
 
             this.cache = {
@@ -28,7 +28,7 @@ class HolidayService {
                 timestamp: Date.now(),
             };
 
-            console.log(`[Holiday] Fetched ${Object.keys(response.data).length} holiday entries`);
+            // Holidays fetched and cached
             return response.data;
         } catch (error) {
             console.error('[Holiday] Failed to fetch holidays:', error);
@@ -59,7 +59,7 @@ class HolidayService {
         // Sort by date
         yearHolidays.sort((a, b) => a.date.localeCompare(b.date));
 
-        console.log(`[Holiday] Found ${yearHolidays.length} holidays for year ${year}`);
+        // Holidays for year processed
         return yearHolidays;
     }
 

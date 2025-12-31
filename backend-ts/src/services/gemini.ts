@@ -50,7 +50,7 @@ Pastikan category adalah SALAH SATU dari: promotion, holiday, store-closed, even
 
             const confidence = Math.min(Math.max(parsed.confidence || 0.7, 0), 1);
 
-            console.log(`[Gemini] Classified "${title}" as "${category}" (${confidence})`);
+            // Event classified
 
             return {
                 category,
@@ -121,8 +121,7 @@ Pastikan category adalah SALAH SATU dari: promotion, holiday, store-closed, even
                     .map((r: any, idx: number) => `${idx + 1}. ${r.productName} (kategori: ${r.category || 'N/A'}) - stok saat ini: ${r.currentStock} unit, prediksi kebutuhan: ${r.predictedDemand} unit, rekomendasi restock: ${r.recommendedRestock} unit, urgensi: ${r.urgency}`)
                     .join('\n');
 
-                console.log('[Gemini] Recommendations data received:');
-                console.log(recommendations);
+                // Recommendations data processed
 
                 contextInfo += `
 
@@ -236,7 +235,7 @@ ${meta.warning ? `Peringatan: ${meta.warning}` : ''}
 CATATAN: Tidak ada data rekomendasi restock spesifik, namun data prediksi penjualan tersedia untuk analisis.`;
             }
         } else {
-            console.log('[Gemini] No prediction data received');
+            // No prediction data available
             contextInfo = `
 CATATAN: Saat ini tidak ada data prediksi yang tersedia. Jika user bertanya tentang prediksi atau restock, minta mereka untuk menjalankan prediksi terlebih dahulu di halaman Smart Prediction.`;
         }
@@ -332,17 +331,14 @@ Format respons normal (tanpa aksi):
                         .trim();
                 }
 
-                console.log('[Gemini] Attempting to parse response:', cleanedText.substring(0, 200));
-
                 const parsed = JSON.parse(cleanedText);
-                console.log('[Gemini] Successfully parsed JSON, response:', parsed.response?.substring(0, 100));
 
                 return {
                     response: parsed.response || responseText,
                     action: parsed.action || { type: 'none', needsConfirmation: false },
                 };
             } catch (parseError) {
-                console.log('[Gemini] Failed to parse as JSON, returning as plain text');
+                // Plain text response
                 // Not JSON, return as plain text response
                 return {
                     response: responseText,
