@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Eye, EyeOff, Loader2, User, Store, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Loader2, User, Mail, Lock } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useAuth, getFirebaseErrorMessage } from '../context/AuthContext';
 import { AuthError } from 'firebase/auth';
@@ -10,7 +10,6 @@ import '../styles/Auth.css'; // Import file CSS manual
 interface RegisterForm {
   name: string;
   email: string;
-  storeName: string;
   password: string;
   confirmPassword: string;
 }
@@ -20,7 +19,6 @@ export function Register() {
   const [formData, setFormData] = useState<RegisterForm>({
     name: '',
     email: '',
-    storeName: '',
     password: '',
     confirmPassword: '',
   });
@@ -34,7 +32,6 @@ export function Register() {
     const newErrors: Partial<RegisterForm> = {};
     
     if (!formData.name) newErrors.name = 'Nama wajib diisi';
-    if (!formData.storeName) newErrors.storeName = 'Nama toko wajib diisi';
     
     if (!formData.email) {
       newErrors.email = 'Email wajib diisi';
@@ -139,22 +136,7 @@ export function Register() {
               {errors.email && <p className="input-error-msg">{errors.email}</p>}
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Nama Toko</label>
-              <div className="input-wrapper">
-                <div className="input-icon">
-                  <Store size={20} />
-                </div>
-                <input
-                  type="text"
-                  value={formData.storeName}
-                  onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
-                  className={`auth-input ${errors.storeName ? 'error' : ''}`}
-                  placeholder="Masukkan nama toko Anda"
-                />
-              </div>
-              {errors.storeName && <p className="input-error-msg">{errors.storeName}</p>}
-            </div>
+
 
             <div className="form-grid">
               <div className="form-group">
