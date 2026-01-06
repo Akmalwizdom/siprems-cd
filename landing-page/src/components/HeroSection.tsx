@@ -63,9 +63,6 @@ const HeroSection = () => {
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </a>
             </Button>
-            <Button variant="hero-outline" size="xl">
-              Lihat Demo
-            </Button>
           </motion.div>
 
           {/* Stats */}
