@@ -16,11 +16,11 @@ const Navbar = () => {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
-      <nav className="glass-strong mx-4 mt-4 rounded-2xl px-6 py-4 shadow-lg">
-        <div className="container mx-auto flex items-center justify-between">
+      <nav className="glass-strong mx-4 mt-4 rounded-2xl px-6 py-3 shadow-lg overflow-visible">
+        <div className="container mx-auto flex items-center justify-between h-10">
           {/* Logo */}
-          <a href="#beranda" className="flex items-center gap-2">
-            <img src="/logo-siprems.png" alt="Siprems Logo" className="h-12 w-12 rounded-xl object-contain" />
+          <a href="#beranda" className="flex items-center relative">
+            <img src="/logo-siprems.png" alt="Siprems Logo" className="h-16 w-16 rounded-xl object-contain" style={{ marginTop: '-8px', marginBottom: '-8px' }} />
             <span className="text-xl font-bold text-foreground">Siprems</span>
           </a>
 
